@@ -164,6 +164,17 @@ def test_notification_targets_reject_unknown_channel():
     raise AssertionError("未知通知渠道应被拒绝")
 
 
+def test_notification_targets_reject_global_only_deprecated_channels():
+    for channel in ["ntfy", "bark", "gotify"]:
+        try:
+            TaskUpdate(notification_targets=[{"channel": channel, "recipient": "x"}])
+        except ValueError as exc:
+            assert "Unsupported notification channel" in str(exc)
+            continue
+
+        raise AssertionError(f"{channel} 不应作为任务级通知渠道")
+
+
 def test_task_update_does_not_set_notification_targets_when_omitted():
     update = TaskUpdate(enabled=False)
     assert update.model_dump(exclude_unset=True) == {"enabled": False}

@@ -54,6 +54,10 @@ CHANNEL_NOTIFICATION_FIELDS = {
     },
 }
 
+PREFERRED_NOTIFICATION_CHANNELS = ("wecom_app",)
+DEPRECATED_NOTIFICATION_CHANNELS = ("ntfy", "bark", "gotify", "wecom")
+ADVANCED_COMPAT_NOTIFICATION_CHANNELS = ("telegram", "webhook")
+
 SECRET_NOTIFICATION_FIELDS = {
     "BARK_URL",
     "GOTIFY_TOKEN",
@@ -125,6 +129,11 @@ def build_notification_settings_response(
         attr_name = NOTIFICATION_FIELD_MAP[field]
         response[f"{field}_SET"] = bool(getattr(notification_settings, attr_name))
     response["CONFIGURED_CHANNELS"] = build_configured_channels(notification_settings)
+    response["PREFERRED_CHANNELS"] = list(PREFERRED_NOTIFICATION_CHANNELS)
+    response["DEPRECATED_CHANNELS"] = get_deprecated_notification_channels(
+        notification_settings
+    )
+    response["ADVANCED_COMPAT_CHANNELS"] = list(ADVANCED_COMPAT_NOTIFICATION_CHANNELS)
     return response
 
 
@@ -171,6 +180,17 @@ def build_configured_channels(
     if notification_settings.webhook_url:
         channels.append("webhook")
     return channels
+
+
+def get_deprecated_notification_channels(
+    settings: NotificationSettings | None = None,
+) -> list[str]:
+    configured_channels = build_configured_channels(settings)
+    return [
+        channel
+        for channel in configured_channels
+        if channel in DEPRECATED_NOTIFICATION_CHANNELS
+    ]
 
 
 def prepare_notification_settings_update(
