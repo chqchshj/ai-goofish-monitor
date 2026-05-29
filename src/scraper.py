@@ -47,7 +47,6 @@ from src.services.item_analysis_dispatcher import (
 from src.services.price_history_service import (
     record_market_snapshots,
 )
-from src.services.seller_profile_cache import SellerProfileCache
 from src.services.search_pagination import (
     advance_search_page,
     is_search_results_response,
@@ -68,6 +67,7 @@ from src.xianyu.guards import (
     is_risk_control_ret,
 )
 from src.xianyu.search import build_search_url
+from src.xianyu.seller_profile import build_seller_profile_loader
 
 
 class RiskControlError(Exception):
@@ -237,12 +237,6 @@ def _get_ai_analysis_concurrency(task_config: dict) -> int:
     configured = task_config.get("ai_analysis_concurrency")
     default = _as_int(os.getenv("AI_ANALYSIS_CONCURRENCY"), 2)
     return max(1, _as_int(configured, default))
-
-
-def _get_seller_profile_cache_ttl(task_config: dict) -> int:
-    configured = task_config.get("seller_profile_cache_ttl")
-    default = _as_int(os.getenv("SELLER_PROFILE_CACHE_TTL"), 1800)
-    return max(0, _as_int(configured, default))
 
 
 def _default_context_options() -> dict:
@@ -497,15 +491,13 @@ async def scrape_xianyu(task_config: dict, debug_limit: int = 0):
             context = await browser.new_context(
                 storage_state=storage_state_arg, **context_kwargs
             )
-            seller_profile_cache = SellerProfileCache(
-                ttl_seconds=_get_seller_profile_cache_ttl(task_config)
-            )
             analysis_dispatcher = ItemAnalysisDispatcher(
                 concurrency=_get_ai_analysis_concurrency(task_config),
                 skip_ai_analysis=SKIP_AI_ANALYSIS,
-                seller_loader=lambda user_id: seller_profile_cache.get_or_load(
-                    str(user_id),
-                    lambda seller_key: scrape_user_profile(context, seller_key),
+                seller_loader=build_seller_profile_loader(
+                    context,
+                    task_config,
+                    profile_scraper=scrape_user_profile,
                 ),
                 image_downloader=download_all_images,
                 ai_analyzer=get_ai_analysis,
