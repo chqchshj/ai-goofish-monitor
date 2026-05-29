@@ -56,8 +56,19 @@ from src.services.search_pagination import (
 from src.pipeline.task_runtime import TaskRuntimeConfig
 from src.pipeline.records import build_final_record
 from src.pipeline.scan_state import build_scan_state
+from src.pipeline.item_processing import (
+    build_item_progress_message,
+    is_processed_item,
+    should_stop_for_debug_limit,
+)
 from src.xianyu import browser_session
 from src.xianyu.detail import enrich_item_from_detail
+from src.xianyu.filters import SearchFilterOptions, apply_search_filters
+from src.xianyu.guards import (
+    build_login_required_message,
+    format_risk_sleep_message,
+    is_risk_control_ret,
+)
 from src.xianyu.search import build_search_url
 
 
@@ -368,17 +379,12 @@ async def scrape_xianyu(task_config: dict, debug_limit: int = 0):
     runtime_config = TaskRuntimeConfig.from_dict(task_config)
     keyword = runtime_config.keyword
     max_pages = runtime_config.max_pages
-    personal_only = runtime_config.personal_only
-    min_price = runtime_config.min_price
-    max_price = runtime_config.max_price
     ai_prompt_text = runtime_config.ai_prompt_text
     analyze_images = runtime_config.analyze_images
     decision_mode = runtime_config.decision_mode
     keyword_rules = runtime_config.keyword_rules
     notification_targets = runtime_config.notification_targets
-    free_shipping = runtime_config.free_shipping
-    new_publish_option = runtime_config.new_publish_option
-    region_filter = runtime_config.region_filter
+    filter_options = SearchFilterOptions.from_runtime_config(runtime_config)
 
     scan_state = build_scan_state(keyword)
     history_run_id = scan_state.history_run_id
@@ -563,9 +569,7 @@ async def scrape_xianyu(task_config: dict, debug_limit: int = 0):
                         search_url, wait_until="domcontentloaded", timeout=60000
                     )
                 if _is_login_url(page.url):
-                    raise LoginRequiredError(
-                        f"Login required: redirected to {page.url} (cookies/state likely expired)"
-                    )
+                    raise LoginRequiredError(build_login_required_message(page.url))
 
                 # 捕获初始搜索的API数据
                 initial_response = await initial_response_info.value
@@ -576,7 +580,7 @@ async def scrape_xianyu(task_config: dict, debug_limit: int = 0):
                 except PlaywrightTimeoutError as e:
                     if _is_login_url(page.url):
                         raise LoginRequiredError(
-                            f"Login required: redirected to {page.url} (cookies/state likely expired)"
+                            build_login_required_message(page.url)
                         ) from e
                     raise
 
@@ -639,178 +643,13 @@ async def scrape_xianyu(task_config: dict, debug_limit: int = 0):
                 except PlaywrightTimeoutError:
                     print("LOG: 未检测到广告弹窗。")
 
-                final_response = None
-                log_time("步骤 2 - 应用筛选条件...")
-                if new_publish_option:
-                    try:
-                        await page.click("text=新发布")
-                        await random_sleep(1, 2)  # 原来是 (1.5, 2.5)
-                        async with page.expect_response(
-                            is_search_results_response, timeout=20000
-                        ) as response_info:
-                            await page.click(f"text={new_publish_option}")
-                            # --- 修改: 增加排序后的等待时间 ---
-                            await random_sleep(2, 4)  # 原来是 (3, 5)
-                        final_response = await response_info.value
-                    except PlaywrightTimeoutError:
-                        log_time(
-                            f"新发布筛选 '{new_publish_option}' 请求超时，继续执行。"
-                        )
-                    except Exception as e:
-                        print(f"LOG: 应用新发布筛选失败: {e}")
-
-                if personal_only:
-                    async with page.expect_response(
-                        is_search_results_response, timeout=20000
-                    ) as response_info:
-                        await page.click("text=个人闲置")
-                        # --- 修改: 将固定等待改为随机等待，并加长 ---
-                        await random_sleep(2, 4)  # 原来是 asyncio.sleep(5)
-                    final_response = await response_info.value
-
-                if free_shipping:
-                    try:
-                        async with page.expect_response(
-                            is_search_results_response, timeout=20000
-                        ) as response_info:
-                            await page.click("text=包邮")
-                            await random_sleep(2, 4)
-                        final_response = await response_info.value
-                    except PlaywrightTimeoutError:
-                        log_time("包邮筛选请求超时，继续执行。")
-                    except Exception as e:
-                        print(f"LOG: 应用包邮筛选失败: {e}")
-
-                if region_filter:
-                    try:
-                        area_trigger = page.get_by_text("区域", exact=True)
-                        if await area_trigger.count():
-                            await area_trigger.first.click()
-                            await random_sleep(1.5, 2)
-                            popover_candidates = page.locator("div.ant-popover")
-                            popover = popover_candidates.filter(
-                                has=page.locator(
-                                    ".areaWrap--FaZHsn8E, [class*='areaWrap']"
-                                )
-                            ).last
-                            if not await popover.count():
-                                popover = popover_candidates.filter(
-                                    has=page.get_by_text("重新定位")
-                                ).last
-                            if not await popover.count():
-                                popover = popover_candidates.filter(
-                                    has=page.get_by_text("查看")
-                                ).last
-                            if not await popover.count():
-                                print("LOG: 未找到区域弹窗，跳过区域筛选。")
-                                raise PlaywrightTimeoutError("region-popover-not-found")
-                            await popover.wait_for(state="visible", timeout=5000)
-
-                            # 列表容器：第一层 children 即省/市/区三列，不再强依赖具体类名，提升鲁棒性
-                            area_wrap = popover.locator(
-                                ".areaWrap--FaZHsn8E, [class*='areaWrap']"
-                            ).first
-                            await area_wrap.wait_for(state="visible", timeout=3000)
-                            columns = area_wrap.locator(":scope > div")
-                            col_prov = columns.nth(0)
-                            col_city = columns.nth(1)
-                            col_dist = columns.nth(2)
-
-                            region_parts = [
-                                p.strip() for p in region_filter.split("/") if p.strip()
-                            ]
-
-                            async def _click_in_column(
-                                column_locator, text_value: str, desc: str
-                            ) -> None:
-                                option = column_locator.locator(
-                                    ".provItem--QAdOx8nD", has_text=text_value
-                                ).first
-                                if await option.count():
-                                    await option.click()
-                                    await random_sleep(1.5, 2)
-                                    try:
-                                        await option.wait_for(
-                                            state="attached", timeout=1500
-                                        )
-                                        await option.wait_for(
-                                            state="visible", timeout=1500
-                                        )
-                                    except PlaywrightTimeoutError:
-                                        pass
-                                else:
-                                    print(f"LOG: 未找到{desc} '{text_value}'，跳过。")
-
-                            if len(region_parts) >= 1:
-                                await _click_in_column(
-                                    col_prov, region_parts[0], "省份"
-                                )
-                                await random_sleep(1, 2)
-                            if len(region_parts) >= 2:
-                                await _click_in_column(
-                                    col_city, region_parts[1], "城市"
-                                )
-                                await random_sleep(1, 2)
-                            if len(region_parts) >= 3:
-                                await _click_in_column(
-                                    col_dist, region_parts[2], "区/县"
-                                )
-                                await random_sleep(1, 2)
-
-                            search_btn = popover.locator(
-                                "div.searchBtn--Ic6RKcAb"
-                            ).first
-                            if await search_btn.count():
-                                try:
-                                    async with page.expect_response(
-                                        is_search_results_response,
-                                        timeout=20000,
-                                    ) as response_info:
-                                        await search_btn.click()
-                                        await random_sleep(2, 3)
-                                    final_response = await response_info.value
-                                except PlaywrightTimeoutError:
-                                    log_time("区域筛选提交超时，继续执行。")
-                            else:
-                                print(
-                                    "LOG: 未找到区域弹窗的“查看XX件宝贝”按钮，跳过提交。"
-                                )
-                        else:
-                            print("LOG: 未找到区域筛选触发器。")
-                    except PlaywrightTimeoutError:
-                        log_time(f"区域筛选 '{region_filter}' 请求超时，继续执行。")
-                    except Exception as e:
-                        print(f"LOG: 应用区域筛选 '{region_filter}' 失败: {e}")
-
-                if min_price or max_price:
-                    price_container = page.locator(
-                        'div[class*="search-price-input-container"]'
-                    ).first
-                    if await price_container.is_visible():
-                        if min_price:
-                            await price_container.get_by_placeholder("¥").first.fill(
-                                min_price
-                            )
-                            # --- 修改: 将固定等待改为随机等待 ---
-                            await random_sleep(1, 2.5)  # 原来是 asyncio.sleep(5)
-                        if max_price:
-                            await (
-                                price_container.get_by_placeholder("¥")
-                                .nth(1)
-                                .fill(max_price)
-                            )
-                            # --- 修改: 将固定等待改为随机等待 ---
-                            await random_sleep(1, 2.5)  # 原来是 asyncio.sleep(5)
-
-                        async with page.expect_response(
-                            is_search_results_response, timeout=20000
-                        ) as response_info:
-                            await page.keyboard.press("Tab")
-                            # --- 修改: 增加确认价格后的等待时间 ---
-                            await random_sleep(2, 4)  # 原来是 asyncio.sleep(5)
-                        final_response = await response_info.value
-                    else:
-                        print("LOG: 警告 - 未找到价格输入容器。")
+                final_response = await apply_search_filters(
+                    page,
+                    filter_options,
+                    response_predicate=is_search_results_response,
+                    random_sleep=random_sleep,
+                    log_time=log_time,
+                )
 
                 log_time("所有筛选已完成，开始处理商品列表...")
 
@@ -855,7 +694,9 @@ async def scrape_xianyu(task_config: dict, debug_limit: int = 0):
 
                     total_items_on_page = len(basic_items)
                     for i, item_data in enumerate(basic_items, 1):
-                        if debug_limit > 0 and processed_item_count >= debug_limit:
+                        if should_stop_for_debug_limit(
+                            debug_limit, processed_item_count
+                        ):
                             log_time(
                                 f"已达到调试上限 ({debug_limit})，停止获取新商品。"
                             )
@@ -863,14 +704,21 @@ async def scrape_xianyu(task_config: dict, debug_limit: int = 0):
                             break
 
                         unique_key = get_link_unique_key(item_data["商品链接"])
-                        if unique_key in processed_links:
+                        if is_processed_item(item_data, processed_links):
                             log_time(
-                                f"[页内进度 {i}/{total_items_on_page}] 商品 '{item_data['商品标题'][:20]}...' 已存在，跳过。"
+                                build_item_progress_message(
+                                    i,
+                                    total_items_on_page,
+                                    item_data["商品标题"],
+                                    skipped=True,
+                                )
                             )
                             continue
 
                         log_time(
-                            f"[页内进度 {i}/{total_items_on_page}] 发现新商品，获取详情: {item_data['商品标题'][:30]}..."
+                            build_item_progress_message(
+                                i, total_items_on_page, item_data["商品标题"]
+                            )
                         )
                         # --- 修改: 访问详情页前的等待时间，模拟用户在列表页上看了一会儿 ---
                         await random_sleep(2, 4)  # 原来是 (2, 4)
@@ -890,10 +738,10 @@ async def scrape_xianyu(task_config: dict, debug_limit: int = 0):
                             if detail_response.ok:
                                 detail_json = await detail_response.json()
 
-                                ret_string = str(
-                                    await safe_get(detail_json, "ret", default=[])
+                                ret_value = await safe_get(
+                                    detail_json, "ret", default=[]
                                 )
-                                if "FAIL_SYS_USER_VALIDATE" in ret_string:
+                                if is_risk_control_ret(ret_value):
                                     print(
                                         "\n==================== CRITICAL BLOCK DETECTED ===================="
                                     )
@@ -901,9 +749,7 @@ async def scrape_xianyu(task_config: dict, debug_limit: int = 0):
                                         "检测到闲鱼反爬虫验证 (FAIL_SYS_USER_VALIDATE)，程序将终止。"
                                     )
                                     long_sleep_duration = random.randint(3, 60)
-                                    print(
-                                        f"为避免账户风险，将执行一次长时间休眠 ({long_sleep_duration} 秒) 后再退出..."
-                                    )
+                                    print(format_risk_sleep_message(long_sleep_duration))
                                     await asyncio.sleep(long_sleep_duration)
                                     print("长时间休眠结束，现在将安全退出。")
                                     print(
@@ -997,7 +843,7 @@ async def scrape_xianyu(task_config: dict, debug_limit: int = 0):
             except PlaywrightTimeoutError as e:
                 if _is_login_url(page.url):
                     raise LoginRequiredError(
-                        f"Login required: redirected to {page.url} (cookies/state likely expired)"
+                        build_login_required_message(page.url)
                     ) from e
                 print(f"\n操作超时错误: 页面元素或网络响应未在规定时间内出现。\n{e}")
                 raise
