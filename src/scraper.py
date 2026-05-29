@@ -58,6 +58,13 @@ from src.pipeline.item_processing import (
     prepare_detail_analysis_job_kwargs,
     should_stop_for_debug_limit,
 )
+from src.pipeline.pagination_state import (
+    should_process_page,
+    should_rest_before_next_page,
+    should_skip_invalid_page_response,
+    should_stop_after_page_advance,
+    should_stop_for_empty_page_items,
+)
 from src.xianyu import browser_session
 from src.xianyu.detail import build_detail_analysis_job, enrich_item_from_detail
 from src.xianyu.filters import SearchFilterOptions, apply_search_filters
@@ -649,7 +656,7 @@ async def scrape_xianyu(task_config: dict, debug_limit: int = 0):
                     else initial_response
                 )
                 for page_num in range(1, max_pages + 1):
-                    if stop_scraping:
+                    if not should_process_page(stop_scraping):
                         break
                     log_time(f"开始处理第 {page_num}/{max_pages} 页 ...")
 
@@ -658,18 +665,18 @@ async def scrape_xianyu(task_config: dict, debug_limit: int = 0):
                             page=page,
                             page_num=page_num,
                         )
-                        if not page_advance_result.advanced:
+                        if should_stop_after_page_advance(page_advance_result):
                             break
                         current_response = page_advance_result.response
 
-                    if not (current_response and current_response.ok):
+                    if should_skip_invalid_page_response(current_response):
                         log_time(f"第 {page_num} 页响应无效，跳过。")
                         continue
 
                     basic_items = await _parse_search_results_json(
                         await current_response.json(), f"第 {page_num} 页"
                     )
-                    if not basic_items:
+                    if should_stop_for_empty_page_items(basic_items):
                         break
                     historical_snapshots.extend(
                         record_market_snapshots(
@@ -810,7 +817,11 @@ async def scrape_xianyu(task_config: dict, debug_limit: int = 0):
                             await random_sleep(2, 4)  # 原来是 (1, 2.5)
 
                     # --- 新增: 在处理完一页所有商品后，翻页前，增加一个更长的“休息”时间 ---
-                    if not stop_scraping and page_num < max_pages:
+                    if should_rest_before_next_page(
+                        stop_scraping=stop_scraping,
+                        page_num=page_num,
+                        max_pages=max_pages,
+                    ):
                         print(
                             f"--- 第 {page_num} 页处理完毕，准备翻页。执行一次页面间的长时休息... ---"
                         )
