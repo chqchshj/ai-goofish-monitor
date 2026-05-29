@@ -28,6 +28,7 @@ if _USING_PYDANTIC_SETTINGS:
             env_file_encoding="utf-8",
             extra="ignore",
             protected_namespaces=(),
+            populate_by_name=True,
         )
 else:
     class _EnvSettings(BaseSettings):

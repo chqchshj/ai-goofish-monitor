@@ -4,7 +4,6 @@ import os
 import random
 from datetime import datetime
 from typing import Optional
-from urllib.parse import urlencode
 
 from playwright.async_api import (
     Response,
@@ -21,9 +20,7 @@ from src.ai_handler import (
 from src.config import (
     AI_DEBUG_MODE,
     DETAIL_API_URL_PATTERN,
-    LOGIN_IS_EDGE,
     RUN_HEADLESS,
-    RUNNING_IN_DOCKER,
     SKIP_AI_ANALYSIS,
     STATE_FILE,
 )
@@ -35,7 +32,6 @@ from src.parsers import (
     parse_user_head_data,
 )
 from src.utils import (
-    format_registration_days,
     get_link_unique_key,
     log_time,
     random_sleep,
@@ -45,22 +41,24 @@ from src.utils import (
 from src.rotation import RotationPool, load_state_files, parse_proxy_pool, RotationItem
 from src.failure_guard import FailureGuard
 from src.services.account_strategy_service import resolve_account_runtime_plan
-from src.infrastructure.persistence.storage_names import build_result_filename
 from src.services.item_analysis_dispatcher import (
     ItemAnalysisDispatcher,
     ItemAnalysisJob,
 )
 from src.services.price_history_service import (
-    build_market_reference,
-    load_price_snapshots,
     record_market_snapshots,
 )
-from src.services.result_storage_service import load_processed_link_keys
 from src.services.seller_profile_cache import SellerProfileCache
 from src.services.search_pagination import (
     advance_search_page,
     is_search_results_response,
 )
+from src.pipeline.task_runtime import TaskRuntimeConfig
+from src.pipeline.records import build_final_record
+from src.pipeline.scan_state import build_scan_state
+from src.xianyu import browser_session
+from src.xianyu.detail import enrich_item_from_detail
+from src.xianyu.search import build_search_url
 
 
 class RiskControlError(Exception):
@@ -72,27 +70,19 @@ class LoginRequiredError(Exception):
 
 
 FAILURE_GUARD = FailureGuard()
-EDGE_DOCKER_WARNING_PRINTED = False
+EDGE_DOCKER_WARNING_PRINTED = browser_session.EDGE_DOCKER_WARNING_PRINTED
 
 
 def _is_login_url(url: str) -> bool:
-    if not url:
-        return False
-    lowered = url.lower()
-    return "passport.goofish.com" in lowered or "mini_login" in lowered
+    return browser_session.is_login_url(url)
 
 
 def _resolve_browser_channel() -> str:
     global EDGE_DOCKER_WARNING_PRINTED
-    if RUNNING_IN_DOCKER:
-        if LOGIN_IS_EDGE and not EDGE_DOCKER_WARNING_PRINTED:
-            print(
-                "检测到 LOGIN_IS_EDGE=true，但 Docker 镜像未内置 Edge，"
-                "任务运行时将改用 Chromium。"
-            )
-            EDGE_DOCKER_WARNING_PRINTED = True
-        return "chromium"
-    return "msedge" if LOGIN_IS_EDGE else "chrome"
+    browser_session.EDGE_DOCKER_WARNING_PRINTED = EDGE_DOCKER_WARNING_PRINTED
+    channel = browser_session.resolve_browser_channel()
+    EDGE_DOCKER_WARNING_PRINTED = browser_session.EDGE_DOCKER_WARNING_PRINTED
+    return channel
 
 
 def _should_analyze_images(task_config: dict) -> bool:
@@ -247,95 +237,23 @@ def _get_seller_profile_cache_ttl(task_config: dict) -> int:
 
 
 def _default_context_options() -> dict:
-    return {
-        "user_agent": "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
-        "viewport": {"width": 412, "height": 915},
-        "device_scale_factor": 2.625,
-        "is_mobile": True,
-        "has_touch": True,
-        "locale": "zh-CN",
-        "timezone_id": "Asia/Shanghai",
-        "permissions": ["geolocation"],
-        "geolocation": {"longitude": 121.4737, "latitude": 31.2304},
-        "color_scheme": "light",
-    }
+    return browser_session.default_context_options()
 
 
 def _clean_kwargs(options: dict) -> dict:
-    return {k: v for k, v in options.items() if v is not None}
+    return browser_session.clean_kwargs(options)
 
 
 def _looks_like_mobile(ua: str) -> Optional[bool]:
-    if not ua:
-        return None
-    ua_lower = ua.lower()
-    if "mobile" in ua_lower or "android" in ua_lower or "iphone" in ua_lower:
-        return True
-    if "windows" in ua_lower or "macintosh" in ua_lower:
-        return False
-    return None
+    return browser_session.looks_like_mobile(ua)
 
 
 def _build_context_overrides(snapshot: dict) -> dict:
-    env = snapshot.get("env") or {}
-    headers = snapshot.get("headers") or {}
-    navigator = env.get("navigator") or {}
-    screen = env.get("screen") or {}
-    intl = env.get("intl") or {}
-
-    overrides = {}
-
-    ua = (
-        headers.get("User-Agent")
-        or headers.get("user-agent")
-        or navigator.get("userAgent")
-    )
-    if ua:
-        overrides["user_agent"] = ua
-
-    accept_language = headers.get("Accept-Language") or headers.get("accept-language")
-    locale = None
-    if accept_language:
-        locale = accept_language.split(",")[0].strip()
-    elif navigator.get("language"):
-        locale = navigator["language"]
-    if locale:
-        overrides["locale"] = locale
-
-    tz = intl.get("timeZone")
-    if tz:
-        overrides["timezone_id"] = tz
-
-    width = screen.get("width")
-    height = screen.get("height")
-    if isinstance(width, (int, float)) and isinstance(height, (int, float)):
-        overrides["viewport"] = {"width": int(width), "height": int(height)}
-
-    dpr = screen.get("devicePixelRatio")
-    if isinstance(dpr, (int, float)):
-        overrides["device_scale_factor"] = float(dpr)
-
-    touch_points = navigator.get("maxTouchPoints")
-    if isinstance(touch_points, (int, float)):
-        overrides["has_touch"] = touch_points > 0
-
-    mobile_flag = _looks_like_mobile(ua or "")
-    if mobile_flag is not None:
-        overrides["is_mobile"] = mobile_flag
-
-    return _clean_kwargs(overrides)
+    return browser_session.build_context_overrides(snapshot)
 
 
 def _build_extra_headers(raw_headers: Optional[dict]) -> dict:
-    if not raw_headers:
-        return {}
-    excluded = {"cookie", "content-length"}
-    headers = {}
-    for key, value in raw_headers.items():
-        if not key or key.lower() in excluded or value is None:
-            continue
-        headers[key] = value
-    return headers
+    return browser_session.build_extra_headers(raw_headers)
 
 
 async def scrape_user_profile(context, user_id: str) -> dict:
@@ -447,31 +365,27 @@ async def scrape_xianyu(task_config: dict, debug_limit: int = 0):
     【核心执行器】
     根据单个任务配置，异步爬取闲鱼商品数据，并对每个新发现的商品进行实时的、独立的AI分析和通知。
     """
-    keyword = task_config["keyword"]
-    max_pages = task_config.get("max_pages", 1)
-    personal_only = task_config.get("personal_only", False)
-    min_price = task_config.get("min_price")
-    max_price = task_config.get("max_price")
-    ai_prompt_text = task_config.get("ai_prompt_text", "")
-    analyze_images = _should_analyze_images(task_config)
-    decision_mode = str(task_config.get("decision_mode", "ai")).strip().lower()
-    if decision_mode not in {"ai", "keyword"}:
-        decision_mode = "ai"
-    keyword_rules = task_config.get("keyword_rules") or []
-    notification_targets = task_config.get("notification_targets") or []
-    free_shipping = task_config.get("free_shipping", False)
-    raw_new_publish = task_config.get("new_publish_option") or ""
-    new_publish_option = raw_new_publish.strip()
-    if new_publish_option == "__none__":
-        new_publish_option = ""
-    region_filter = (task_config.get("region") or "").strip()
+    runtime_config = TaskRuntimeConfig.from_dict(task_config)
+    keyword = runtime_config.keyword
+    max_pages = runtime_config.max_pages
+    personal_only = runtime_config.personal_only
+    min_price = runtime_config.min_price
+    max_price = runtime_config.max_price
+    ai_prompt_text = runtime_config.ai_prompt_text
+    analyze_images = runtime_config.analyze_images
+    decision_mode = runtime_config.decision_mode
+    keyword_rules = runtime_config.keyword_rules
+    notification_targets = runtime_config.notification_targets
+    free_shipping = runtime_config.free_shipping
+    new_publish_option = runtime_config.new_publish_option
+    region_filter = runtime_config.region_filter
 
-    processed_links = set()
-    history_run_id = datetime.now().strftime("%Y%m%d%H%M%S")
-    history_seen_item_ids: set[str] = set()
-    historical_snapshots = load_price_snapshots(keyword)
-    result_filename = build_result_filename(keyword)
-    processed_links = load_processed_link_keys(keyword)
+    scan_state = build_scan_state(keyword)
+    history_run_id = scan_state.history_run_id
+    history_seen_item_ids = scan_state.history_seen_item_ids
+    historical_snapshots = scan_state.historical_snapshots
+    result_filename = scan_state.result_filename
+    processed_links = scan_state.processed_links
     if processed_links:
         print(f"LOG: 发现已存在结果集 {result_filename}，已加载 {len(processed_links)} 个历史商品用于去重。")
     else:
@@ -551,22 +465,9 @@ async def scrape_xianyu(task_config: dict, debug_limit: int = 0):
             print(f"警告：读取登录状态文件失败，将直接按路径使用: {e}")
 
         async with async_playwright() as p:
-            # 反检测启动参数
-            launch_args = [
-                "--disable-blink-features=AutomationControlled",
-                "--disable-dev-shm-usage",
-                "--no-sandbox",
-                "--disable-setuid-sandbox",
-                "--disable-web-security",
-                "--disable-features=IsolateOrigins,site-per-process",
-            ]
-
-            launch_kwargs = {"headless": RUN_HEADLESS, "args": launch_args}
-            if proxy_server:
-                launch_kwargs["proxy"] = {"server": proxy_server}
-
-            launch_kwargs["channel"] = _resolve_browser_channel()
-
+            launch_kwargs = browser_session.build_launch_kwargs(
+                RUN_HEADLESS, proxy_server
+            )
             browser = await p.chromium.launch(**launch_kwargs)
 
             context_kwargs = _default_context_options()
@@ -651,8 +552,7 @@ async def scrape_xianyu(task_config: dict, debug_limit: int = 0):
 
                 log_time("步骤 1 - 导航到搜索结果页...")
                 # 使用 'q' 参数构建正确的搜索URL，并进行URL编码
-                params = {"q": keyword}
-                search_url = f"https://www.goofish.com/search?{urlencode(params)}"
+                search_url = build_search_url(keyword)
                 log_time(f"目标URL: {search_url}")
 
                 # 先监听搜索接口响应，再执行导航，避免错过首次请求
@@ -1011,77 +911,26 @@ async def scrape_xianyu(task_config: dict, debug_limit: int = 0):
                                     )
                                     raise RiskControlError("FAIL_SYS_USER_VALIDATE")
 
-                                # 解析商品详情数据并更新 item_data
-                                item_do = await safe_get(
-                                    detail_json, "data", "itemDO", default={}
+                                detail_enrichment = await enrich_item_from_detail(
+                                    item_data, detail_json
                                 )
-                                seller_do = await safe_get(
-                                    detail_json, "data", "sellerDO", default={}
-                                )
+                                item_data = detail_enrichment["item_data"]
+                                user_id = detail_enrichment["user_id"]
+                                zhima_credit_text = detail_enrichment[
+                                    "zhima_credit_text"
+                                ]
+                                registration_duration_text = detail_enrichment[
+                                    "registration_duration_text"
+                                ]
 
-                                reg_days_raw = await safe_get(
-                                    seller_do, "userRegDay", default=0
-                                )
-                                registration_duration_text = format_registration_days(
-                                    reg_days_raw
-                                )
-
-                                # --- START: 新增代码块 ---
-
-                                # 1. 提取卖家的芝麻信用信息
-                                zhima_credit_text = await safe_get(
-                                    seller_do, "zhimaLevelInfo", "levelName"
-                                )
-
-                                # 2. 提取该商品的完整图片列表
-                                image_infos = await safe_get(
-                                    item_do, "imageInfos", default=[]
-                                )
-                                if image_infos:
-                                    # 使用列表推导式获取所有有效的图片URL
-                                    all_image_urls = [
-                                        img.get("url")
-                                        for img in image_infos
-                                        if img.get("url")
-                                    ]
-                                    if all_image_urls:
-                                        # 用新的字段存储图片列表，替换掉旧的单个链接
-                                        item_data["商品图片列表"] = all_image_urls
-                                        # (可选) 仍然保留主图链接，以防万一
-                                        item_data["商品主图链接"] = all_image_urls[0]
-
-                                # --- END: 新增代码块 ---
-                                item_data["“想要”人数"] = await safe_get(
-                                    item_do,
-                                    "wantCnt",
-                                    default=item_data.get("“想要”人数", "NaN"),
-                                )
-                                item_data["浏览量"] = await safe_get(
-                                    item_do, "browseCnt", default="-"
-                                )
-                                # ...[此处可添加更多从详情页解析出的商品信息]...
-
-                                user_id = await safe_get(seller_do, "sellerId")
-
-                                # 构建基础记录
-                                final_record = {
-                                    "爬取时间": datetime.now().isoformat(),
-                                    "搜索关键字": keyword,
-                                    "任务名称": task_config.get(
+                                final_record = build_final_record(
+                                    keyword=keyword,
+                                    task_name=task_config.get(
                                         "task_name", "Untitled Task"
                                     ),
-                                    "商品信息": item_data,
-                                    "卖家信息": {},
-                                }
-                                price_reference = build_market_reference(
-                                    keyword=keyword,
-                                    item=item_data,
+                                    item_data=item_data,
                                     current_market_items=basic_items,
                                     historical_snapshots=historical_snapshots,
-                                )
-                                final_record["价格参考"] = price_reference
-                                final_record["price_insight"] = price_reference.get(
-                                    "本商品价格位置", {}
                                 )
 
                                 analysis_dispatcher.submit(

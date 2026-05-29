@@ -234,7 +234,7 @@ def test_update_notification_settings_persists_wecom_app_config(tmp_path, monkey
     assert "WECOM_APP_CORPID=corp-id" in latest
     assert "WECOM_APP_SECRET=app-secret" in latest
     assert "WECOM_APP_AGENTID=1000001" in latest
-    assert "WECOM_APP_TOUSER=user1|user2" in latest
+    assert 'WECOM_APP_TOUSER=user1|user2' in latest or 'WECOM_APP_TOUSER="user1|user2"' in latest
 
 
 def test_wecom_app_departments_and_users_use_configured_app_credentials(

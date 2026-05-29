@@ -1,8 +1,8 @@
-# 闲鱼智能监控系统
+# xianyu-tools / 闲鱼工具箱
 
 [中文] ｜ [English](README_EN.md)
 
-基于 Playwright 和 AI 的闲鱼多任务实时监控，提供完整的 Web 管理界面。
+基于 Playwright 和 AI 的闲鱼多任务实时监控工具箱，提供完整的 Web 管理界面。
 
 
 ## 核心特性
@@ -26,7 +26,7 @@
 ## 🐳 Docker 部署（推荐）
 
 ```bash
-git clone https://github.com/Usagi-org/ai-goofish-monitor && cd ai-goofish-monitor
+git clone https://github.com/Usagi-org/ai-goofish-monitor xianyu-tools && cd xianyu-tools
 cp .env.example .env
 vim .env # 填写相关配置项
 docker compose up -d

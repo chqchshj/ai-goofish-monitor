@@ -1,8 +1,8 @@
-# Xianyu Intelligent Monitor Bot
+# xianyu-tools / Xianyu Toolbox
 
 [中文](README.md) ｜ [English]
 
-A Playwright and AI-powered multi-task real-time monitoring tool for Xianyu (闲鱼), featuring a complete web management interface.
+A Playwright and AI-powered multi-task toolbox for Xianyu (闲鱼), featuring real-time monitoring and a complete web management interface.
 
 ## Core Features
 
@@ -33,8 +33,8 @@ A Playwright and AI-powered multi-task real-time monitoring tool for Xianyu (闲
 - Chrome or Edge on desktop systems. On Linux, Chromium also works. `start.sh` checks this prerequisite before continuing
 
 ```bash
-git clone https://github.com/Usagi-org/ai-goofish-monitor
-cd ai-goofish-monitor
+git clone https://github.com/Usagi-org/ai-goofish-monitor xianyu-tools
+cd xianyu-tools
 cp .env.example .env
 ```
 
@@ -74,7 +74,7 @@ chmod +x start.sh
 ## 🐳 Docker Deployment (Recommended)
 
 ```bash
-git clone https://github.com/Usagi-org/ai-goofish-monitor && cd ai-goofish-monitor
+git clone https://github.com/Usagi-org/ai-goofish-monitor xianyu-tools && cd xianyu-tools
 cp .env.example .env
 vim .env # fill in the required values
 docker compose up -d
