@@ -1,45 +1,24 @@
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
+import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import type { NotificationChannel, NotificationTarget, Task, TaskGenerateRequest } from '@/types/task.d.ts'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
-import { Textarea } from '@/components/ui/textarea'
+import type { NotificationTarget, Task, TaskGenerateRequest } from '@/types/task.d.ts'
 import { toast } from '@/components/ui/toast'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import TaskRegionSelector from '@/components/tasks/TaskRegionSelector.vue'
-import {
-  fetchWeComAppDepartments,
-  fetchWeComAppUsers,
-  type WeComAppDepartment,
-  type WeComAppUser,
-} from '@/api/settings'
+import TaskAccountStrategy from '@/components/tasks/TaskAccountStrategy.vue'
+import TaskBasicFields from '@/components/tasks/TaskBasicFields.vue'
+import TaskDecisionMode from '@/components/tasks/TaskDecisionMode.vue'
+import TaskKeywordRules from '@/components/tasks/TaskKeywordRules.vue'
+import TaskNotificationTargets from '@/components/tasks/TaskNotificationTargets.vue'
+import TaskScheduleFields from '@/components/tasks/TaskScheduleFields.vue'
 import {
   AUTO_ACCOUNT_VALUE,
-  EMPTY_CRON_VALUE,
   buildInitialTaskFormState,
   buildTaskSubmitPayload,
-  fromPresetCronModelValue,
-  isPresetCronValue,
   parseKeywordText,
-  toPresetCronModelValue,
   type AccountStrategy,
+  type CronMode,
   type EmittedTaskFormData,
   type FormMode,
 } from '@/components/tasks/taskFormPayload'
-
-interface WeComRecipientPickerState {
-  departments: WeComAppDepartment[]
-  users: WeComAppUser[]
-  selectedDepartmentId: string
-  loadingDepartments: boolean
-  loadingUsers: boolean
-  loadedDepartments: boolean
-  error: string
-}
 
 const props = defineProps<{
   mode: FormMode
@@ -59,193 +38,7 @@ const form = ref<any>({})
 const accountStrategy = ref<AccountStrategy>('auto')
 const selectedAccountStateFile = ref(AUTO_ACCOUNT_VALUE)
 const keywordRulesInput = ref('')
-const cronMode = ref<'preset' | 'custom'>('preset')
-const wecomRecipientPickers = ref<Record<string, WeComRecipientPickerState>>({})
-const notificationChannelOptions = computed(() => [
-  { value: 'telegram', label: t('tasks.form.notifications.channels.telegram') },
-  { value: 'wecom_app', label: t('tasks.form.notifications.channels.wecomApp') },
-  { value: 'wecom', label: t('tasks.form.notifications.channels.wecom') },
-  { value: 'default', label: t('tasks.form.notifications.channels.default') },
-])
-
-// 常用 cron 预设选项
-const cronPresets = computed(() => [
-  { value: EMPTY_CRON_VALUE, label: t('tasks.form.cron.manual') },
-  { value: '*/5 * * * *', label: t('tasks.form.cron.every5Minutes') },
-  { value: '*/15 * * * *', label: t('tasks.form.cron.every15Minutes') },
-  { value: '*/30 * * * *', label: t('tasks.form.cron.every30Minutes') },
-  { value: '0 * * * *', label: t('tasks.form.cron.hourly') },
-  { value: '0 */2 * * *', label: t('tasks.form.cron.every2Hours') },
-  { value: '0 */6 * * *', label: t('tasks.form.cron.every6Hours') },
-  { value: '0 8 * * *', label: t('tasks.form.cron.daily8') },
-  { value: '0 12 * * *', label: t('tasks.form.cron.daily12') },
-  { value: '0 18 * * *', label: t('tasks.form.cron.daily18') },
-  { value: '0 20 * * *', label: t('tasks.form.cron.daily20') },
-  { value: '0 8,12,18 * * *', label: t('tasks.form.cron.daily81218') },
-  { value: '0 9 * * 1-5', label: t('tasks.form.cron.weekday9') },
-  { value: '0 10 * * 6,0', label: t('tasks.form.cron.weekend10') },
-])
-
-// 判断当前 cron 是否为预设值
-const isPresetCron = computed(() => isPresetCronValue(form.value.cron))
-
-// 预设选择的值
-const presetCronValue = computed({
-  get: () => toPresetCronModelValue(isPresetCron.value ? form.value.cron : undefined),
-  set: (val: string) => { form.value.cron = fromPresetCronModelValue(val) },
-})
-const accountStrategyOptions = computed(() => [
-  { value: 'auto', label: t('tasks.form.accountStrategy.auto'), description: t('tasks.form.accountStrategy.autoDescription') },
-  { value: 'fixed', label: t('tasks.form.accountStrategy.fixed'), description: t('tasks.form.accountStrategy.fixedDescription') },
-  { value: 'rotate', label: t('tasks.form.accountStrategy.rotate'), description: t('tasks.form.accountStrategy.rotateDescription') },
-])
-
-function addNotificationTarget() {
-  const targets = Array.isArray(form.value.notification_targets)
-    ? [...form.value.notification_targets]
-    : []
-  targets.push({ channel: 'telegram', recipient: '', label: '' })
-  form.value.notification_targets = targets
-}
-
-function removeNotificationTarget(index: string | number) {
-  const numericIndex = Number(index)
-  if (!Number.isFinite(numericIndex)) return
-  const targets = Array.isArray(form.value.notification_targets)
-    ? [...form.value.notification_targets]
-    : []
-  targets.splice(numericIndex, 1)
-  form.value.notification_targets = targets
-  delete wecomRecipientPickers.value[String(numericIndex)]
-}
-
-function updateNotificationTargetChannel(index: string | number, value: unknown) {
-  const numericIndex = Number(index)
-  if (!Number.isFinite(numericIndex)) return
-  const channel = String(value || '').trim() as NotificationChannel
-  if (!['telegram', 'wecom_app', 'wecom', 'default'].includes(channel)) return
-
-  const targets = Array.isArray(form.value.notification_targets)
-    ? [...form.value.notification_targets]
-    : []
-  const current = targets[numericIndex]
-  if (!current) return
-
-  targets[numericIndex] = {
-    ...current,
-    channel,
-    recipient: channel === 'default' ? '' : (current.recipient || ''),
-  }
-  form.value.notification_targets = targets
-}
-
-function notificationRecipientPlaceholder(channel: NotificationChannel) {
-  if (channel === 'telegram') return t('tasks.form.notifications.placeholders.telegram')
-  if (channel === 'wecom_app') return t('tasks.form.notifications.placeholders.wecom_app', { at: '@' })
-  if (channel === 'wecom') return t('tasks.form.notifications.placeholders.wecom')
-  return t('tasks.form.notifications.placeholders.default')
-}
-
-function getWeComPickerState(index: string | number): WeComRecipientPickerState {
-  const key = String(index)
-  if (!wecomRecipientPickers.value[key]) {
-    wecomRecipientPickers.value[key] = {
-      departments: [],
-      users: [],
-      selectedDepartmentId: '1',
-      loadingDepartments: false,
-      loadingUsers: false,
-      loadedDepartments: false,
-      error: '',
-    }
-  }
-  return wecomRecipientPickers.value[key]
-}
-
-function getNotificationTarget(index: string | number): NotificationTarget | null {
-  const numericIndex = Number(index)
-  if (!Number.isFinite(numericIndex)) return null
-  const targets = Array.isArray(form.value.notification_targets)
-    ? form.value.notification_targets
-    : []
-  return targets[numericIndex] || null
-}
-
-function parseWeComRecipientIds(recipient: string): string[] {
-  return String(recipient || '')
-    .split('|')
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0 && item !== '@all')
-}
-
-function updateWeComRecipientFromIds(index: string | number, userIds: string[]) {
-  const target = getNotificationTarget(index)
-  if (!target) return
-  target.recipient = Array.from(new Set(userIds)).join('|')
-}
-
-async function loadWeComDepartments(index: string | number) {
-  const state = getWeComPickerState(index)
-  state.loadingDepartments = true
-  state.error = ''
-  try {
-    const payload = await fetchWeComAppDepartments()
-    state.departments = payload.departments
-    state.loadedDepartments = true
-    state.selectedDepartmentId = String(payload.departments[0]?.id ?? (state.selectedDepartmentId || '1'))
-    await loadWeComUsers(index, state.selectedDepartmentId)
-  } catch (error) {
-    state.error = error instanceof Error ? error.message : t('tasks.form.notifications.wecomAppPicker.loadFailed')
-  } finally {
-    state.loadingDepartments = false
-  }
-}
-
-async function loadWeComUsers(index: string | number, departmentId?: string | number) {
-  const state = getWeComPickerState(index)
-  const selectedDepartmentId = String(departmentId || state.selectedDepartmentId || '1')
-  state.selectedDepartmentId = selectedDepartmentId
-  state.loadingUsers = true
-  state.error = ''
-  try {
-    const payload = await fetchWeComAppUsers(selectedDepartmentId, true)
-    state.users = payload.users
-  } catch (error) {
-    state.error = error instanceof Error ? error.message : t('tasks.form.notifications.wecomAppPicker.loadFailed')
-  } finally {
-    state.loadingUsers = false
-  }
-}
-
-function handleWeComDepartmentChange(index: string | number, event: Event) {
-  const departmentId = (event.target as HTMLSelectElement).value
-  void loadWeComUsers(index, departmentId)
-}
-
-function isWeComUserSelected(index: string | number, userid: string): boolean {
-  const target = getNotificationTarget(index)
-  if (!target) return false
-  return parseWeComRecipientIds(target.recipient).includes(userid)
-}
-
-function toggleWeComUser(index: string | number, userid: string, checked: boolean) {
-  const target = getNotificationTarget(index)
-  if (!target) return
-  const ids = parseWeComRecipientIds(target.recipient)
-  if (checked) {
-    ids.push(userid)
-  } else {
-    const removeIndex = ids.indexOf(userid)
-    if (removeIndex >= 0) ids.splice(removeIndex, 1)
-  }
-  updateWeComRecipientFromIds(index, ids)
-}
-
-function setWeComRecipientAll(index: string | number) {
-  const target = getNotificationTarget(index)
-  if (!target) return
-  target.recipient = '@all'
-}
+const cronMode = ref<CronMode>('preset')
 
 watch(() => [props.mode, props.initialData, props.defaultValues, props.defaultAccount], () => {
   const state = buildInitialTaskFormState({
@@ -275,13 +68,8 @@ watch(selectedAccountStateFile, (value) => {
   form.value.account_state_file = value || props.defaultAccount || AUTO_ACCOUNT_VALUE
 })
 
-function handleAccountStrategyChange(event: Event) {
-  const value = (event.target as HTMLSelectElement).value as AccountStrategy
-  accountStrategy.value = value
-}
-
-function handleAccountStateFileChange(event: Event) {
-  selectedAccountStateFile.value = (event.target as HTMLSelectElement).value || AUTO_ACCOUNT_VALUE
+function updateNotificationTargets(value: NotificationTarget[]) {
+  form.value.notification_targets = value
 }
 
 function handleSubmit() {
@@ -333,306 +121,24 @@ function handleSubmit() {
   emit('submit', result.payload!)
 }
 
-function handleAddNotificationTarget(event?: Event) {
-  event?.preventDefault()
-  event?.stopPropagation()
-  addNotificationTarget()
-}
-
-function handleRemoveNotificationTarget(event: Event, index: string | number) {
-  event.preventDefault()
-  event.stopPropagation()
-  removeNotificationTarget(index)
-}
 </script>
 
 <template>
   <form :id="formId || 'task-form'" @submit.prevent="handleSubmit">
     <div class="grid gap-6 py-4">
-      <div class="grid gap-2 sm:grid-cols-4 sm:items-center sm:gap-4">
-        <Label for="task-name" class="sm:text-right">{{ t('tasks.form.taskName') }}</Label>
-        <Input id="task-name" v-model="form.task_name" class="sm:col-span-3" :placeholder="t('tasks.form.taskNamePlaceholder')" required />
-      </div>
-      <div class="grid gap-2 sm:grid-cols-4 sm:items-center sm:gap-4">
-        <Label for="keyword" class="sm:text-right">{{ t('tasks.form.keyword') }}</Label>
-        <Input id="keyword" v-model="form.keyword" class="sm:col-span-3" :placeholder="t('tasks.form.keywordPlaceholder')" required />
-      </div>
-      <div class="grid gap-2 sm:grid-cols-4 sm:items-center sm:gap-4">
-        <Label class="sm:text-right">{{ t('tasks.form.decisionMode') }}</Label>
-        <div class="sm:col-span-3">
-          <Select v-model="form.decision_mode">
-            <SelectTrigger>
-              <SelectValue :placeholder="t('tasks.form.decisionModePlaceholder')" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ai">{{ t('tasks.form.aiMode') }}</SelectItem>
-              <SelectItem value="keyword">{{ t('tasks.form.keywordMode') }}</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-      <div class="grid gap-2 sm:grid-cols-4 sm:items-center sm:gap-4">
-        <Label for="description" class="sm:text-right">{{ t('tasks.form.description') }}</Label>
-        <div class="space-y-1 sm:col-span-3">
-          <Textarea
-            id="description"
-            v-model="form.description"
-            :placeholder="t('tasks.form.descriptionPlaceholder')"
-          />
-          <p v-if="form.decision_mode === 'keyword'" class="text-xs text-gray-500">
-            {{ t('tasks.form.keywordDescriptionHint') }}
-          </p>
-        </div>
-      </div>
-      <div v-if="form.decision_mode === 'ai'" class="grid gap-2 sm:grid-cols-4 sm:items-center sm:gap-4">
-        <Label for="analyze-images" class="sm:text-right">{{ t('tasks.form.analyzeImages') }}</Label>
-        <div class="space-y-1 sm:col-span-3">
-          <Switch id="analyze-images" v-model="form.analyze_images" />
-          <p class="text-xs text-gray-500">
-            {{ t('tasks.form.analyzeImagesHint') }}
-          </p>
-        </div>
-      </div>
-
-      <div v-if="form.decision_mode === 'keyword'" class="grid gap-2 sm:grid-cols-4 sm:gap-4">
-        <Label class="pt-1 sm:pt-2 sm:text-right">{{ t('tasks.form.keywordRules') }}</Label>
-        <div class="space-y-2 sm:col-span-3">
-          <p class="text-xs text-gray-500">
-            {{ t('tasks.form.keywordRulesHint') }}
-          </p>
-          <Textarea
-            v-model="keywordRulesInput"
-            class="min-h-[120px]"
-            :placeholder="t('tasks.form.keywordRulesPlaceholder')"
-          />
-        </div>
-      </div>
-
-      <div class="grid gap-2 sm:grid-cols-4 sm:items-center sm:gap-4">
-        <Label class="sm:text-right">{{ t('tasks.form.priceRange') }}</Label>
-        <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:col-span-3">
-          <Input type="number" v-model="form.min_price as any" :aria-label="t('tasks.form.minPrice')" :placeholder="t('tasks.form.minPrice')" />
-          <span>-</span>
-          <Input type="number" v-model="form.max_price as any" :aria-label="t('tasks.form.maxPrice')" :placeholder="t('tasks.form.maxPrice')" />
-        </div>
-      </div>
-      <div class="grid gap-2 sm:grid-cols-4 sm:items-center sm:gap-4">
-        <Label for="max-pages" class="sm:text-right">{{ t('tasks.form.maxPages') }}</Label>
-        <Input id="max-pages" v-model.number="form.max_pages" type="number" class="sm:col-span-3" />
-      </div>
-      <div class="grid gap-2 sm:grid-cols-4 sm:items-center sm:gap-4">
-        <Label for="cron" class="sm:text-right">{{ t('tasks.form.schedule') }}</Label>
-        <div class="space-y-2 sm:col-span-3">
-          <Tabs v-model="cronMode" class="w-full">
-            <TabsList class="grid w-full grid-cols-2">
-              <TabsTrigger value="preset">{{ t('tasks.form.cronPresetTab') }}</TabsTrigger>
-              <TabsTrigger value="custom">{{ t('tasks.form.cronCustomTab') }}</TabsTrigger>
-            </TabsList>
-            <TabsContent value="preset">
-              <Select v-model="presetCronValue">
-                <SelectTrigger>
-                  <SelectValue :placeholder="t('tasks.form.cronPlaceholder')" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem v-for="preset in cronPresets" :key="preset.value" :value="preset.value">
-                    {{ preset.label }}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </TabsContent>
-            <TabsContent value="custom">
-              <Input
-                id="cron"
-                v-model="form.cron"
-                :placeholder="t('tasks.form.cronCustomPlaceholder')"
-              />
-              <p class="text-xs text-gray-500 mt-1">
-                {{ t('tasks.form.cronCustomHintLine1') }}
-              </p>
-              <p class="text-xs text-gray-500">
-                {{ t('tasks.form.cronCustomHintLine2') }}
-              </p>
-            </TabsContent>
-          </Tabs>
-        </div>
-      </div>
-      <div class="grid gap-2 sm:grid-cols-4 sm:items-center sm:gap-4">
-        <Label class="sm:text-right">{{ t('tasks.form.accountStrategyLabel') }}</Label>
-        <div class="space-y-2 sm:col-span-3">
-          <select
-            :value="accountStrategy"
-            class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-            @change="handleAccountStrategyChange"
-          >
-            <option v-for="option in accountStrategyOptions" :key="option.value" :value="option.value">
-              {{ option.label }}
-            </option>
-          </select>
-          <p class="text-xs text-gray-500">
-            {{ accountStrategyOptions.find((option) => option.value === accountStrategy)?.description }}
-          </p>
-        </div>
-      </div>
-      <div v-if="accountStrategy === 'fixed'" class="grid gap-2 sm:grid-cols-4 sm:items-center sm:gap-4">
-        <Label class="sm:text-right">{{ t('tasks.form.fixedAccount') }}</Label>
-        <div class="sm:col-span-3">
-          <select
-            :value="selectedAccountStateFile"
-            class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-            @change="handleAccountStateFileChange"
-          >
-            <option :value="AUTO_ACCOUNT_VALUE">{{ t('tasks.form.selectAccount') }}</option>
-            <option v-for="account in accountOptions || []" :key="account.path" :value="account.path">
-              {{ account.name }}
-            </option>
-          </select>
-        </div>
-      </div>
-      <div class="grid gap-2 sm:grid-cols-4 sm:items-center sm:gap-4">
-        <Label for="personal-only" class="sm:text-right">{{ t('tasks.form.personalOnly') }}</Label>
-        <div class="sm:col-span-3">
-          <Switch id="personal-only" v-model="form.personal_only" />
-        </div>
-      </div>
-      <div class="grid gap-2 sm:grid-cols-4 sm:items-center sm:gap-4">
-        <Label for="free-shipping" class="sm:text-right">{{ t('tasks.form.freeShipping') }}</Label>
-        <div class="sm:col-span-3">
-          <Switch id="free-shipping" v-model="form.free_shipping" />
-        </div>
-      </div>
-      <div class="grid gap-2 sm:grid-cols-4 sm:items-center sm:gap-4">
-        <Label class="sm:text-right">{{ t('tasks.form.newPublish') }}</Label>
-        <div class="sm:col-span-3">
-          <Select v-model="form.new_publish_option as any">
-            <SelectTrigger>
-              <SelectValue :placeholder="t('tasks.form.publishOptions.none')" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__none__">{{ t('tasks.form.publishOptions.none') }}</SelectItem>
-              <SelectItem value="最新">{{ t('tasks.form.publishOptions.latest') }}</SelectItem>
-              <SelectItem value="1天内">{{ t('tasks.form.publishOptions.oneDay') }}</SelectItem>
-              <SelectItem value="3天内">{{ t('tasks.form.publishOptions.threeDays') }}</SelectItem>
-              <SelectItem value="7天内">{{ t('tasks.form.publishOptions.sevenDays') }}</SelectItem>
-              <SelectItem value="14天内">{{ t('tasks.form.publishOptions.fourteenDays') }}</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-      <div class="grid gap-2 sm:grid-cols-4 sm:items-center sm:gap-4">
-        <Label class="sm:text-right">{{ t('tasks.form.region') }}</Label>
-        <div class="space-y-1 sm:col-span-3">
-          <TaskRegionSelector v-model="form.region as any" />
-          <p class="text-xs text-gray-500">{{ t('tasks.form.regionHint') }}</p>
-        </div>
-      </div>
-      <div class="grid gap-2 sm:grid-cols-4 sm:gap-4">
-        <Label class="pt-1 sm:pt-2 sm:text-right">{{ t('tasks.form.notifications.title') }}</Label>
-        <div class="space-y-3 sm:col-span-3">
-          <p class="text-xs text-gray-500">{{ t('tasks.form.notifications.hint') }}</p>
-          <div
-            v-for="(target, index) in form.notification_targets || []"
-            :key="index"
-            class="grid gap-2 rounded-md border p-3 md:grid-cols-[150px_minmax(260px,1fr)_150px_auto]"
-          >
-            <select
-              :value="target.channel"
-              class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-              @change="(event) => updateNotificationTargetChannel(index, (event.target as HTMLSelectElement).value)"
-            >
-              <option v-for="option in notificationChannelOptions" :key="option.value" :value="option.value">
-                {{ option.label }}
-              </option>
-            </select>
-            <Input
-              v-if="target.channel !== 'wecom_app'"
-              v-model="target.recipient"
-              :disabled="target.channel === 'default'"
-              :placeholder="notificationRecipientPlaceholder(target.channel)"
-            />
-            <div v-else class="space-y-2">
-              <Input
-                v-model="target.recipient"
-                :placeholder="notificationRecipientPlaceholder(target.channel)"
-              />
-              <div class="space-y-2 rounded-md border bg-muted/20 p-2">
-                <div class="flex flex-wrap items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    :disabled="getWeComPickerState(index).loadingDepartments"
-                    @click="loadWeComDepartments(index)"
-                  >
-                    {{
-                      getWeComPickerState(index).loadedDepartments
-                        ? t('tasks.form.notifications.wecomAppPicker.reloadContacts')
-                        : t('tasks.form.notifications.wecomAppPicker.loadContacts')
-                    }}
-                  </Button>
-                  <Button type="button" variant="outline" size="sm" @click="setWeComRecipientAll(index)">
-                    {{ t('tasks.form.notifications.wecomAppPicker.allMembers', { at: '@' }) }}
-                  </Button>
-                  <select
-                    v-if="getWeComPickerState(index).departments.length > 0"
-                    :value="getWeComPickerState(index).selectedDepartmentId"
-                    class="h-9 min-w-[180px] rounded-md border border-input bg-background px-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                    @change="(event) => handleWeComDepartmentChange(index, event)"
-                  >
-                    <option
-                      v-for="department in getWeComPickerState(index).departments"
-                      :key="department.id"
-                      :value="String(department.id)"
-                    >
-                      {{ department.name }}
-                    </option>
-                  </select>
-                </div>
-                <p v-if="getWeComPickerState(index).error" class="text-xs text-destructive">
-                  {{ getWeComPickerState(index).error }}
-                </p>
-                <p
-                  v-else-if="getWeComPickerState(index).loadingDepartments || getWeComPickerState(index).loadingUsers"
-                  class="text-xs text-gray-500"
-                >
-                  {{ t('tasks.form.notifications.wecomAppPicker.loading') }}
-                </p>
-                <div v-if="getWeComPickerState(index).users.length > 0" class="grid max-h-40 gap-1 overflow-auto pr-1 sm:grid-cols-2">
-                  <label
-                    v-for="user in getWeComPickerState(index).users"
-                    :key="user.userid"
-                    class="flex min-w-0 items-center gap-2 rounded border px-2 py-1 text-sm"
-                  >
-                    <input
-                      type="checkbox"
-                      class="h-4 w-4"
-                      :checked="isWeComUserSelected(index, user.userid)"
-                      @change="(event) => toggleWeComUser(index, user.userid, (event.target as HTMLInputElement).checked)"
-                    >
-                    <span class="min-w-0 truncate">{{ user.name || user.userid }}</span>
-                    <span class="min-w-0 truncate text-xs text-gray-500">{{ user.userid }}</span>
-                  </label>
-                </div>
-                <p
-                  v-else-if="getWeComPickerState(index).loadedDepartments && !getWeComPickerState(index).loadingUsers && !getWeComPickerState(index).error"
-                  class="text-xs text-gray-500"
-                >
-                  {{ t('tasks.form.notifications.wecomAppPicker.noUsers') }}
-                </p>
-                <p class="text-xs text-gray-500">
-                  {{ t('tasks.form.notifications.wecomAppPicker.manualFallback') }}
-                </p>
-              </div>
-            </div>
-            <Input v-model="target.label" :placeholder="t('tasks.form.notifications.labelPlaceholder')" />
-            <Button type="button" variant="outline" size="sm" @click="handleRemoveNotificationTarget($event, index)">
-              {{ t('common.delete') }}
-            </Button>
-          </div>
-          <Button type="button" variant="outline" size="sm" @click="handleAddNotificationTarget">
-            {{ t('tasks.form.notifications.add') }}
-          </Button>
-        </div>
-      </div>
+      <TaskBasicFields :form="form" />
+      <TaskDecisionMode :form="form" />
+      <TaskKeywordRules v-if="form.decision_mode === 'keyword'" v-model="keywordRulesInput" />
+      <TaskScheduleFields :form="form" v-model:cron-mode="cronMode" />
+      <TaskAccountStrategy
+        v-model:account-strategy="accountStrategy"
+        v-model:selected-account-state-file="selectedAccountStateFile"
+        :account-options="accountOptions"
+      />
+      <TaskNotificationTargets
+        :model-value="form.notification_targets || []"
+        @update:model-value="updateNotificationTargets"
+      />
     </div>
   </form>
 </template>
