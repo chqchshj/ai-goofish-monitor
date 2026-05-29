@@ -17,11 +17,19 @@ import {
   type WeComAppDepartment,
   type WeComAppUser,
 } from '@/api/settings'
-
-type FormMode = 'create' | 'edit'
-type EmittedData = TaskGenerateRequest | Partial<Task>
-const AUTO_ACCOUNT_VALUE = '__auto__'
-const EMPTY_CRON_VALUE = '__manual__'
+import {
+  AUTO_ACCOUNT_VALUE,
+  EMPTY_CRON_VALUE,
+  buildInitialTaskFormState,
+  buildTaskSubmitPayload,
+  fromPresetCronModelValue,
+  isPresetCronValue,
+  parseKeywordText,
+  toPresetCronModelValue,
+  type AccountStrategy,
+  type EmittedTaskFormData,
+  type FormMode,
+} from '@/components/tasks/taskFormPayload'
 
 interface WeComRecipientPickerState {
   departments: WeComAppDepartment[]
@@ -43,12 +51,12 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (e: 'submit', data: EmittedData): void
+  (e: 'submit', data: EmittedTaskFormData): void
 }>()
 const { t } = useI18n()
 
 const form = ref<any>({})
-const accountStrategy = ref<'auto' | 'fixed' | 'rotate'>('auto')
+const accountStrategy = ref<AccountStrategy>('auto')
 const selectedAccountStateFile = ref(AUTO_ACCOUNT_VALUE)
 const keywordRulesInput = ref('')
 const cronMode = ref<'preset' | 'custom'>('preset')
@@ -78,66 +86,19 @@ const cronPresets = computed(() => [
   { value: '0 10 * * 6,0', label: t('tasks.form.cron.weekend10') },
 ])
 
-// 判断 cron 值是否为预设值
-function isPresetCronValue(value: string): boolean {
-  if (!value) return true
-  return cronPresets.value.some((preset) => preset.value === value)
-}
-
 // 判断当前 cron 是否为预设值
 const isPresetCron = computed(() => isPresetCronValue(form.value.cron))
 
 // 预设选择的值
 const presetCronValue = computed({
-  get: () => {
-    if (!isPresetCron.value) return EMPTY_CRON_VALUE
-    return form.value.cron || EMPTY_CRON_VALUE
-  },
-  set: (val: string) => { form.value.cron = val === EMPTY_CRON_VALUE ? '' : val },
+  get: () => toPresetCronModelValue(isPresetCron.value ? form.value.cron : undefined),
+  set: (val: string) => { form.value.cron = fromPresetCronModelValue(val) },
 })
 const accountStrategyOptions = computed(() => [
   { value: 'auto', label: t('tasks.form.accountStrategy.auto'), description: t('tasks.form.accountStrategy.autoDescription') },
   { value: 'fixed', label: t('tasks.form.accountStrategy.fixed'), description: t('tasks.form.accountStrategy.fixedDescription') },
   { value: 'rotate', label: t('tasks.form.accountStrategy.rotate'), description: t('tasks.form.accountStrategy.rotateDescription') },
 ])
-
-function parseKeywordText(text: string): string[] {
-  const values = String(text || '')
-    .split(/[\n,]+/)
-    .map((item) => item.trim())
-    .filter((item) => item.length > 0)
-
-  const seen = new Set<string>()
-  const deduped: string[] = []
-  for (const value of values) {
-    const key = value.toLowerCase()
-    if (seen.has(key)) continue
-    seen.add(key)
-    deduped.push(value)
-  }
-  return deduped
-}
-
-function normalizeNotificationTargets(value: unknown): NotificationTarget[] {
-  if (!Array.isArray(value)) return []
-  const seen = new Set<string>()
-  const targets: NotificationTarget[] = []
-  for (const item of value) {
-    if (!item || typeof item !== 'object') continue
-    const raw = item as Partial<NotificationTarget>
-    const channel = String(raw.channel || '').trim() as NotificationChannel
-    const recipient = channel === 'default' ? '' : String(raw.recipient || '').trim()
-    const label = String(raw.label || '').trim()
-    if (!channel && !recipient) continue
-    if (!['telegram', 'wecom_app', 'wecom', 'default'].includes(channel)) continue
-    if (channel !== 'default' && !recipient) continue
-    const key = `${channel}:${recipient}`
-    if (seen.has(key)) continue
-    seen.add(key)
-    targets.push({ channel, recipient, ...(label ? { label } : {}) })
-  }
-  return targets
-}
 
 function addNotificationTarget() {
   const targets = Array.isArray(form.value.notification_targets)
@@ -287,74 +248,17 @@ function setWeComRecipientAll(index: string | number) {
 }
 
 watch(() => [props.mode, props.initialData, props.defaultValues, props.defaultAccount], () => {
-  const defaultValues = props.defaultValues || {}
-  if (props.mode === 'edit' && props.initialData) {
-    form.value = {
-      ...props.initialData,
-      ...defaultValues,
-      account_strategy:
-        defaultValues.account_strategy ||
-        props.initialData.account_strategy ||
-        (props.initialData.account_state_file ? 'fixed' : 'auto'),
-      account_state_file:
-        defaultValues.account_state_file ||
-        props.initialData.account_state_file ||
-        AUTO_ACCOUNT_VALUE,
-      analyze_images: defaultValues.analyze_images ?? props.initialData.analyze_images ?? true,
-      free_shipping: defaultValues.free_shipping ?? props.initialData.free_shipping ?? true,
-      new_publish_option:
-        defaultValues.new_publish_option || props.initialData.new_publish_option || '__none__',
-      region: defaultValues.region || props.initialData.region || '',
-      decision_mode: defaultValues.decision_mode || props.initialData.decision_mode || 'ai',
-      notification_targets: normalizeNotificationTargets(
-        defaultValues.notification_targets || props.initialData.notification_targets || [],
-      ),
-    }
-    keywordRulesInput.value = (defaultValues.keyword_rules || props.initialData.keyword_rules || []).join('\n')
-    // 编辑模式下，根据 cron 值判断模式
-    const cronVal = defaultValues.cron ?? props.initialData.cron ?? ''
-    cronMode.value = isPresetCronValue(cronVal) ? 'preset' : 'custom'
-  } else {
-    form.value = {
-      task_name: '',
-      keyword: '',
-      description: '',
-      analyze_images: true,
-      max_pages: 3,
-      personal_only: true,
-      min_price: undefined,
-      max_price: undefined,
-      cron: '',
-      account_strategy: props.defaultAccount ? 'fixed' : 'auto',
-      account_state_file: props.defaultAccount || AUTO_ACCOUNT_VALUE,
-      free_shipping: true,
-      new_publish_option: '__none__',
-      region: '',
-      decision_mode: 'ai',
-      notification_targets: [],
-      ...defaultValues,
-    }
-    if (!form.value.account_strategy) {
-      form.value.account_strategy = props.defaultAccount ? 'fixed' : 'auto'
-    }
-    if (!form.value.account_state_file) {
-      form.value.account_state_file = props.defaultAccount || AUTO_ACCOUNT_VALUE
-    }
-    if (!form.value.new_publish_option) {
-      form.value.new_publish_option = '__none__'
-    }
-    keywordRulesInput.value = ''
-    if (defaultValues.keyword_rules && defaultValues.keyword_rules.length > 0) {
-      keywordRulesInput.value = defaultValues.keyword_rules.join('\n')
-    }
-    // 创建模式下，根据默认值判断模式
-    const cronVal = defaultValues.cron ?? ''
-    cronMode.value = isPresetCronValue(cronVal) ? 'preset' : 'custom'
-  }
-
-  accountStrategy.value = form.value.account_strategy || (props.defaultAccount ? 'fixed' : 'auto')
-  selectedAccountStateFile.value =
-    form.value.account_state_file || props.defaultAccount || AUTO_ACCOUNT_VALUE
+  const state = buildInitialTaskFormState({
+    mode: props.mode,
+    initialData: props.initialData,
+    defaultValues: props.defaultValues,
+    defaultAccount: props.defaultAccount,
+  })
+  form.value = state.form
+  keywordRulesInput.value = state.keywordRulesInput
+  cronMode.value = state.cronMode
+  accountStrategy.value = state.accountStrategy
+  selectedAccountStateFile.value = state.selectedAccountStateFile
 }, { immediate: true, deep: true })
 
 watch(accountStrategy, (value) => {
@@ -372,7 +276,7 @@ watch(selectedAccountStateFile, (value) => {
 })
 
 function handleAccountStrategyChange(event: Event) {
-  const value = (event.target as HTMLSelectElement).value as 'auto' | 'fixed' | 'rotate'
+  const value = (event.target as HTMLSelectElement).value as AccountStrategy
   accountStrategy.value = value
 }
 
@@ -410,48 +314,23 @@ function handleSubmit() {
     return
   }
 
-  // Filter out fields that shouldn't be sent in update requests
-  const { id, is_running, next_run_at, ...submitData } = form.value as any
-  const currentAccountStrategy = accountStrategy.value || 'auto'
-  if (currentAccountStrategy === 'fixed') {
-    const currentAccountStateFile = selectedAccountStateFile.value || AUTO_ACCOUNT_VALUE
-    if (currentAccountStateFile === AUTO_ACCOUNT_VALUE) {
-      toast({
-        title: t('tasks.form.validation.accountStrategyIncomplete'),
-        description: t('tasks.form.validation.fixedAccountRequired'),
-        variant: 'destructive',
-      })
-      return
-    }
-    submitData.account_state_file = currentAccountStateFile
-  } else {
-    submitData.account_state_file = null
+  const result = buildTaskSubmitPayload({
+    form: form.value,
+    keywordRulesInput: keywordRulesInput.value,
+    accountStrategy: accountStrategy.value,
+    selectedAccountStateFile: selectedAccountStateFile.value,
+  })
+
+  if (result.error === 'fixed-account-required') {
+    toast({
+      title: t('tasks.form.validation.accountStrategyIncomplete'),
+      description: t('tasks.form.validation.fixedAccountRequired'),
+      variant: 'destructive',
+    })
+    return
   }
 
-  if (typeof submitData.region === 'string') {
-    const normalized = submitData.region
-      .trim()
-      .split('/')
-      .map((part: string) => part.trim().replace(/(省|市)$/u, ''))
-      .filter((part: string) => part.length > 0)
-      .join('/')
-    submitData.region = normalized
-  }
-
-  if (submitData.new_publish_option === '__none__') {
-    submitData.new_publish_option = ''
-  }
-
-  submitData.decision_mode = decisionMode
-  submitData.account_strategy = currentAccountStrategy
-  submitData.analyze_images = submitData.analyze_images !== false
-  submitData.keyword_rules = decisionMode === 'keyword' ? keywordRules : []
-  submitData.notification_targets = normalizeNotificationTargets(submitData.notification_targets)
-  if (decisionMode === 'keyword' && !submitData.description) {
-    submitData.description = ''
-  }
-
-  emit('submit', submitData)
+  emit('submit', result.payload!)
 }
 
 function handleAddNotificationTarget(event?: Event) {
