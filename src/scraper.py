@@ -32,7 +32,6 @@ from src.parsers import (
     parse_user_head_data,
 )
 from src.utils import (
-    get_link_unique_key,
     log_time,
     random_sleep,
     safe_get,
@@ -55,7 +54,8 @@ from src.pipeline.task_runtime import TaskRuntimeConfig
 from src.pipeline.scan_state import build_scan_state
 from src.pipeline.item_processing import (
     build_item_progress_message,
-    is_processed_item,
+    normalize_item_candidate,
+    prepare_detail_analysis_job_kwargs,
     should_stop_for_debug_limit,
 )
 from src.xianyu import browser_session
@@ -693,13 +693,16 @@ async def scrape_xianyu(task_config: dict, debug_limit: int = 0):
                             stop_scraping = True
                             break
 
-                        unique_key = get_link_unique_key(item_data["商品链接"])
-                        if is_processed_item(item_data, processed_links):
+                        candidate = normalize_item_candidate(
+                            item_data, processed_links
+                        )
+                        item_data = candidate.item_data
+                        if candidate.is_processed:
                             log_time(
                                 build_item_progress_message(
                                     i,
                                     total_items_on_page,
-                                    item_data["商品标题"],
+                                    candidate.title,
                                     skipped=True,
                                 )
                             )
@@ -707,7 +710,7 @@ async def scrape_xianyu(task_config: dict, debug_limit: int = 0):
 
                         log_time(
                             build_item_progress_message(
-                                i, total_items_on_page, item_data["商品标题"]
+                                i, total_items_on_page, candidate.title
                             )
                         )
                         # --- 修改: 访问详情页前的等待时间，模拟用户在列表页上看了一会儿 ---
@@ -753,22 +756,24 @@ async def scrape_xianyu(task_config: dict, debug_limit: int = 0):
                                 item_data = detail_enrichment["item_data"]
                                 analysis_dispatcher.submit(
                                     build_detail_analysis_job(
-                                        keyword=keyword,
-                                        task_name=task_config.get(
-                                            "task_name", "Untitled Task"
-                                        ),
-                                        detail_enrichment=detail_enrichment,
-                                        current_market_items=basic_items,
-                                        historical_snapshots=historical_snapshots,
-                                        decision_mode=decision_mode,
-                                        analyze_images=analyze_images,
-                                        prompt_text=ai_prompt_text,
-                                        keyword_rules=keyword_rules,
-                                        notification_targets=notification_targets,
+                                        **prepare_detail_analysis_job_kwargs(
+                                            keyword=keyword,
+                                            task_name=task_config.get(
+                                                "task_name", "Untitled Task"
+                                            ),
+                                            detail_enrichment=detail_enrichment,
+                                            current_market_items=basic_items,
+                                            historical_snapshots=historical_snapshots,
+                                            decision_mode=decision_mode,
+                                            analyze_images=analyze_images,
+                                            prompt_text=ai_prompt_text,
+                                            keyword_rules=keyword_rules,
+                                            notification_targets=notification_targets,
+                                        )
                                     )
                                 )
 
-                                processed_links.add(unique_key)
+                                processed_links.add(candidate.unique_key)
                                 processed_item_count += 1
                                 log_time(
                                     f"商品已提交后台分析。累计处理 {processed_item_count} 个新商品。"
