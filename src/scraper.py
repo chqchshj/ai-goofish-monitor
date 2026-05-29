@@ -43,7 +43,6 @@ from src.failure_guard import FailureGuard
 from src.services.account_strategy_service import resolve_account_runtime_plan
 from src.services.item_analysis_dispatcher import (
     ItemAnalysisDispatcher,
-    ItemAnalysisJob,
 )
 from src.services.price_history_service import (
     record_market_snapshots,
@@ -54,7 +53,6 @@ from src.services.search_pagination import (
     is_search_results_response,
 )
 from src.pipeline.task_runtime import TaskRuntimeConfig
-from src.pipeline.records import build_final_record
 from src.pipeline.scan_state import build_scan_state
 from src.pipeline.item_processing import (
     build_item_progress_message,
@@ -62,7 +60,7 @@ from src.pipeline.item_processing import (
     should_stop_for_debug_limit,
 )
 from src.xianyu import browser_session
-from src.xianyu.detail import enrich_item_from_detail
+from src.xianyu.detail import build_detail_analysis_job, enrich_item_from_detail
 from src.xianyu.filters import SearchFilterOptions, apply_search_filters
 from src.xianyu.guards import (
     build_login_required_message,
@@ -761,38 +759,19 @@ async def scrape_xianyu(task_config: dict, debug_limit: int = 0):
                                     item_data, detail_json
                                 )
                                 item_data = detail_enrichment["item_data"]
-                                user_id = detail_enrichment["user_id"]
-                                zhima_credit_text = detail_enrichment[
-                                    "zhima_credit_text"
-                                ]
-                                registration_duration_text = detail_enrichment[
-                                    "registration_duration_text"
-                                ]
-
-                                final_record = build_final_record(
-                                    keyword=keyword,
-                                    task_name=task_config.get(
-                                        "task_name", "Untitled Task"
-                                    ),
-                                    item_data=item_data,
-                                    current_market_items=basic_items,
-                                    historical_snapshots=historical_snapshots,
-                                )
-
                                 analysis_dispatcher.submit(
-                                    ItemAnalysisJob(
+                                    build_detail_analysis_job(
                                         keyword=keyword,
                                         task_name=task_config.get(
                                             "task_name", "Untitled Task"
                                         ),
+                                        detail_enrichment=detail_enrichment,
+                                        current_market_items=basic_items,
+                                        historical_snapshots=historical_snapshots,
                                         decision_mode=decision_mode,
                                         analyze_images=analyze_images,
                                         prompt_text=ai_prompt_text,
-                                        keyword_rules=tuple(keyword_rules or []),
-                                        final_record=final_record,
-                                        seller_id=str(user_id) if user_id else None,
-                                        zhima_credit_text=zhima_credit_text,
-                                        registration_duration_text=registration_duration_text,
+                                        keyword_rules=keyword_rules,
                                         notification_targets=notification_targets,
                                     )
                                 )

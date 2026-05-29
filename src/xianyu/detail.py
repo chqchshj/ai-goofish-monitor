@@ -1,3 +1,7 @@
+from typing import Optional
+
+from src.pipeline.records import build_final_record
+from src.services.item_analysis_dispatcher import ItemAnalysisJob
 from src.utils import format_registration_days, safe_get
 
 
@@ -31,3 +35,43 @@ async def enrich_item_from_detail(item_data: dict, detail_json: dict) -> dict:
         "zhima_credit_text": zhima_credit_text,
         "registration_duration_text": registration_duration_text,
     }
+
+
+def build_detail_analysis_job(
+    *,
+    keyword: str,
+    task_name: str,
+    detail_enrichment: dict,
+    current_market_items: list[dict],
+    historical_snapshots: list[dict],
+    decision_mode: str,
+    analyze_images: bool,
+    prompt_text: str,
+    keyword_rules: Optional[list] = None,
+    notification_targets: Optional[list[dict]] = None,
+) -> ItemAnalysisJob:
+    item_data = detail_enrichment["item_data"]
+    final_record = build_final_record(
+        keyword=keyword,
+        task_name=task_name,
+        item_data=item_data,
+        current_market_items=current_market_items,
+        historical_snapshots=historical_snapshots,
+    )
+    user_id = detail_enrichment["user_id"]
+
+    return ItemAnalysisJob(
+        keyword=keyword,
+        task_name=task_name,
+        decision_mode=decision_mode,
+        analyze_images=analyze_images,
+        prompt_text=prompt_text,
+        keyword_rules=tuple(keyword_rules or []),
+        final_record=final_record,
+        seller_id=str(user_id) if user_id else None,
+        zhima_credit_text=detail_enrichment["zhima_credit_text"],
+        registration_duration_text=detail_enrichment[
+            "registration_duration_text"
+        ],
+        notification_targets=notification_targets,
+    )
