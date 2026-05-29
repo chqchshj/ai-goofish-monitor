@@ -28,6 +28,9 @@ export interface NotificationSettings {
   WEBHOOK_URL_SET?: boolean
   WEBHOOK_HEADERS_SET?: boolean
   CONFIGURED_CHANNELS?: string[]
+  PREFERRED_CHANNELS?: string[]
+  DEPRECATED_CHANNELS?: string[]
+  ADVANCED_COMPAT_CHANNELS?: string[]
 }
 
 export interface NotificationSettingsUpdate {
