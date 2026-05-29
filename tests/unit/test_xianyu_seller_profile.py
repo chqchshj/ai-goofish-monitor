@@ -4,6 +4,13 @@ from src.xianyu.seller_profile import (
     build_seller_profile_loader,
     resolve_seller_profile_cache_ttl,
 )
+from src.xianyu.seller_profile_scraper import scrape_user_profile
+
+
+def test_scraper_keeps_public_seller_profile_entrypoint():
+    from src import scraper
+
+    assert scraper.scrape_user_profile is scrape_user_profile
 
 
 def test_resolve_seller_profile_cache_ttl_prefers_task_config(monkeypatch):
