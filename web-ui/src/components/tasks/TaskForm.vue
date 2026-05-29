@@ -6,9 +6,11 @@ import { toast } from '@/components/ui/toast'
 import TaskAccountStrategy from '@/components/tasks/TaskAccountStrategy.vue'
 import TaskBasicFields from '@/components/tasks/TaskBasicFields.vue'
 import TaskDecisionMode from '@/components/tasks/TaskDecisionMode.vue'
+import TaskFilterFields from '@/components/tasks/TaskFilterFields.vue'
 import TaskKeywordRules from '@/components/tasks/TaskKeywordRules.vue'
 import TaskNotificationTargets from '@/components/tasks/TaskNotificationTargets.vue'
 import TaskScheduleFields from '@/components/tasks/TaskScheduleFields.vue'
+import TaskSellerPublicationFields from '@/components/tasks/TaskSellerPublicationFields.vue'
 import {
   AUTO_ACCOUNT_VALUE,
   buildInitialTaskFormState,
@@ -129,12 +131,14 @@ function handleSubmit() {
       <TaskBasicFields :form="form" />
       <TaskDecisionMode :form="form" />
       <TaskKeywordRules v-if="form.decision_mode === 'keyword'" v-model="keywordRulesInput" />
+      <TaskFilterFields :form="form" />
       <TaskScheduleFields :form="form" v-model:cron-mode="cronMode" />
       <TaskAccountStrategy
         v-model:account-strategy="accountStrategy"
         v-model:selected-account-state-file="selectedAccountStateFile"
         :account-options="accountOptions"
       />
+      <TaskSellerPublicationFields :form="form" />
       <TaskNotificationTargets
         :model-value="form.notification_targets || []"
         @update:model-value="updateNotificationTargets"
