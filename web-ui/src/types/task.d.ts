@@ -8,6 +8,22 @@ export interface NotificationTarget {
   label?: string;
 }
 
+export type TaskRunState = 'idle' | 'starting' | 'running' | 'stopping' | 'stopped' | 'failed' | 'skipped';
+export type TaskRunErrorCategory = 'failure_guard' | 'spawn_failed' | 'process_failed' | 'unknown' | null;
+
+export interface TaskRunStatus {
+  state: TaskRunState;
+  stage: string;
+  error_category: TaskRunErrorCategory;
+  message: string;
+  pid: number | null;
+  returncode: number | null;
+  log_path: string | null;
+  started_at: string | null;
+  stopped_at: string | null;
+  updated_at: string;
+}
+
 export interface Task {
   id: number;
   task_name: string;
@@ -33,6 +49,7 @@ export interface Task {
   keyword_rules: string[];
   notification_targets: NotificationTarget[];
   is_running: boolean;
+  task_run_status?: TaskRunStatus;
 }
 
 export type TaskGenerationStatus = 'queued' | 'running' | 'completed' | 'failed';

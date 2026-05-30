@@ -9,6 +9,7 @@ def test_create_list_update_delete_task(api_client, api_context, sample_task_pay
     assert created["task_name"] == sample_task_payload["task_name"]
     assert created["analyze_images"] is True
     assert created["next_run_at"] == "2026-03-19T08:15:00+08:00"
+    assert created["task_run_status"]["state"] == "idle"
 
     response = api_client.get("/api/tasks")
     assert response.status_code == 200
@@ -17,6 +18,7 @@ def test_create_list_update_delete_task(api_client, api_context, sample_task_pay
     assert tasks[0]["keyword"] == sample_task_payload["keyword"]
     assert tasks[0]["analyze_images"] is True
     assert tasks[0]["next_run_at"] == "2026-03-19T08:15:00+08:00"
+    assert tasks[0]["task_run_status"]["stage"] == "idle"
 
     response = api_client.patch("/api/tasks/0", json={"enabled": False, "analyze_images": False})
     assert response.status_code == 200
@@ -39,17 +41,25 @@ def test_start_stop_task_updates_status(api_client, api_context, sample_task_pay
 
     response = api_client.post("/api/tasks/start/0")
     assert response.status_code == 200
+    assert response.json()["task"]["task_run_status"]["state"] == "running"
 
     response = api_client.get("/api/tasks/0")
     assert response.status_code == 200
-    assert response.json()["is_running"] is True
+    task = response.json()
+    assert task["is_running"] is True
+    assert task["task_run_status"]["state"] == "running"
+    assert task["task_run_status"]["pid"] == 12345
 
     response = api_client.post("/api/tasks/stop/0")
     assert response.status_code == 200
+    assert response.json()["task"]["task_run_status"]["state"] == "stopped"
 
     response = api_client.get("/api/tasks/0")
     assert response.status_code == 200
-    assert response.json()["is_running"] is False
+    task = response.json()
+    assert task["is_running"] is False
+    assert task["task_run_status"]["state"] == "stopped"
+    assert task["task_run_status"]["returncode"] == 0
 
     process_service = api_context["process_service"]
     assert process_service.started == [(0, sample_task_payload["task_name"])]

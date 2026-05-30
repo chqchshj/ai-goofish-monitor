@@ -7,20 +7,36 @@ from datetime import datetime
 from typing import Any
 
 from src.domain.models.task import Task
+from src.services.task_run_status_service import build_idle_status
 
 
 def serialize_timestamp(value: datetime | None) -> str | None:
     return value.isoformat() if value else None
 
 
-def serialize_task(task: Task, scheduler_service) -> dict[str, Any]:
+def serialize_task(
+    task: Task,
+    scheduler_service,
+    task_run_status_service=None,
+) -> dict[str, Any]:
     payload = task.model_dump()
     next_run_time = None
     if task.id is not None and scheduler_service is not None:
         next_run_time = scheduler_service.get_next_run_time(task.id)
     payload["next_run_at"] = serialize_timestamp(next_run_time)
+    if task_run_status_service is not None:
+        payload["task_run_status"] = task_run_status_service.get_status(task.id)
+    else:
+        payload["task_run_status"] = build_idle_status()
     return payload
 
 
-def serialize_tasks(tasks: list[Task], scheduler_service) -> list[dict[str, Any]]:
-    return [serialize_task(task, scheduler_service) for task in tasks]
+def serialize_tasks(
+    tasks: list[Task],
+    scheduler_service,
+    task_run_status_service=None,
+) -> list[dict[str, Any]]:
+    return [
+        serialize_task(task, scheduler_service, task_run_status_service)
+        for task in tasks
+    ]
