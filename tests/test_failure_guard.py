@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from datetime import datetime, timedelta
 
 from src.failure_guard import FailureGuard
@@ -66,7 +67,11 @@ def test_failure_guard_auto_recovers_on_cookie_change(tmp_path):
     paused = guard.should_skip_start("task-a", cookie_path=str(cookie_path), now=base)
     assert paused.skip is True
 
+    before_stat = cookie_path.stat()
     cookie_path.write_text('{"updated": true}', encoding="utf-8")
+    os.utime(cookie_path, ns=(before_stat.st_atime_ns, before_stat.st_mtime_ns))
+    after_stat = cookie_path.stat()
+    assert after_stat.st_mtime_ns == before_stat.st_mtime_ns
 
     recovered = guard.should_skip_start(
         "task-a",
