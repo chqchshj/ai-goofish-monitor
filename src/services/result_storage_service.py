@@ -134,6 +134,16 @@ def _record_matches_attribute_filters(
     return True
 
 
+def _record_matches_seller_filter(record: dict, seller: str | None) -> bool:
+    expected = str(seller or "").strip()
+    if not expected:
+        return True
+    product = record.get("商品信息", {}) or {}
+    seller_info = record.get("卖家信息", {}) or {}
+    actual = str(seller_info.get("卖家昵称") or product.get("卖家昵称") or "").strip()
+    return actual == expected
+
+
 _PERSONAL_SELLER_POSITIVE_SIGNALS = (
     "个人卖家",
     "个人玩家",
@@ -266,6 +276,7 @@ def _load_filtered_records_from_conn(
     include_hidden: bool,
     yhb_only: bool,
     free_shipping_only: bool,
+    seller: str | None = None,
     personal_seller_only: bool = False,
     processed_only: bool = False,
     contacted_only: bool = False,
@@ -304,6 +315,8 @@ def _load_filtered_records_from_conn(
             yhb_only=yhb_only,
             free_shipping_only=free_shipping_only,
         ):
+            continue
+        if not _record_matches_seller_filter(decorated, seller):
             continue
         if personal_seller_only and not _record_matches_personal_seller_filter(decorated):
             continue
@@ -435,6 +448,7 @@ async def query_result_records(
     include_hidden: bool = False,
     yhb_only: bool = False,
     free_shipping_only: bool = False,
+    seller: str | None = None,
     personal_seller_only: bool = False,
     processed_only: bool = False,
     contacted_only: bool = False,
@@ -452,6 +466,7 @@ async def query_result_records(
         include_hidden,
         yhb_only,
         free_shipping_only,
+        seller,
         personal_seller_only,
         processed_only,
         contacted_only,
@@ -470,6 +485,7 @@ def _query_result_records_sync(
     include_hidden: bool,
     yhb_only: bool,
     free_shipping_only: bool,
+    seller: str | None,
     personal_seller_only: bool,
     processed_only: bool = False,
     contacted_only: bool = False,
@@ -488,6 +504,7 @@ def _query_result_records_sync(
             include_hidden=include_hidden,
             yhb_only=yhb_only,
             free_shipping_only=free_shipping_only,
+            seller=seller,
             personal_seller_only=personal_seller_only,
             processed_only=processed_only,
             contacted_only=contacted_only,
@@ -507,6 +524,7 @@ async def load_all_result_records(
     include_hidden: bool = False,
     yhb_only: bool = False,
     free_shipping_only: bool = False,
+    seller: str | None = None,
     personal_seller_only: bool = False,
     processed_only: bool = False,
     contacted_only: bool = False,
@@ -522,6 +540,7 @@ async def load_all_result_records(
         include_hidden,
         yhb_only,
         free_shipping_only,
+        seller,
         personal_seller_only,
         processed_only,
         contacted_only,
@@ -538,6 +557,7 @@ def _load_all_result_records_sync(
     include_hidden: bool,
     yhb_only: bool,
     free_shipping_only: bool,
+    seller: str | None = None,
     personal_seller_only: bool = False,
     processed_only: bool = False,
     contacted_only: bool = False,
@@ -555,6 +575,7 @@ def _load_all_result_records_sync(
             include_hidden=include_hidden,
             yhb_only=yhb_only,
             free_shipping_only=free_shipping_only,
+            seller=seller,
             personal_seller_only=personal_seller_only,
             processed_only=processed_only,
             contacted_only=contacted_only,

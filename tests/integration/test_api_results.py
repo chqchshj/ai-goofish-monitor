@@ -278,6 +278,56 @@ def test_results_attribute_filters_for_yhb_and_free_shipping_list_and_export(tmp
     assert "Free Shipping Only" not in export_resp.text
 
 
+def test_results_seller_filter_list_and_export(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    jsonl_dir = tmp_path / "jsonl"
+    jsonl_dir.mkdir(parents=True, exist_ok=True)
+    target_file = jsonl_dir / "seller_filter_full_data.jsonl"
+
+    records = [
+        {
+            "爬取时间": "2026-01-01T01:00:00",
+            "商品信息": {"商品ID": "1101", "商品标题": "Alpha One", "当前售价": "¥1000"},
+            "卖家信息": {"卖家昵称": "Alpha"},
+            "ai_analysis": {"analysis_source": "ai", "is_recommended": True},
+        },
+        {
+            "爬取时间": "2026-01-01T02:00:00",
+            "商品信息": {"商品ID": "1102", "商品标题": "Beta One", "当前售价": "¥2000", "卖家昵称": "Beta"},
+            "ai_analysis": {"analysis_source": "ai", "is_recommended": True},
+        },
+        {
+            "爬取时间": "2026-01-01T03:00:00",
+            "商品信息": {"商品ID": "1103", "商品标题": "Alpha Two", "当前售价": "¥3000"},
+            "卖家信息": {"卖家昵称": "Alpha"},
+            "ai_analysis": {"analysis_source": "keyword", "is_recommended": False},
+        },
+    ]
+    _write_jsonl(target_file, records)
+
+    app = FastAPI()
+    app.include_router(results.router)
+    client = TestClient(app)
+
+    alpha_resp = client.get("/api/results/seller_filter_full_data.jsonl", params={"seller": "Alpha"})
+    assert alpha_resp.status_code == 200
+    alpha_payload = alpha_resp.json()
+    assert alpha_payload["total_items"] == 2
+    assert [item["商品信息"]["商品ID"] for item in alpha_payload["items"]] == ["1103", "1101"]
+
+    fallback_resp = client.get("/api/results/seller_filter_full_data.jsonl", params={"seller": "Beta"})
+    assert fallback_resp.status_code == 200
+    fallback_payload = fallback_resp.json()
+    assert fallback_payload["total_items"] == 1
+    assert fallback_payload["items"][0]["商品信息"]["商品ID"] == "1102"
+
+    export_resp = client.get("/api/results/seller_filter_full_data.jsonl/export", params={"seller": "Alpha"})
+    assert export_resp.status_code == 200
+    assert "Alpha One" in export_resp.text
+    assert "Alpha Two" in export_resp.text
+    assert "Beta One" not in export_resp.text
+
+
 def test_results_personal_seller_filter_uses_ai_persona_analysis(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     jsonl_dir = tmp_path / "jsonl"

@@ -94,6 +94,7 @@ async def get_result_file_content(
     include_hidden: bool = Query(False),
     yhb_only: bool = Query(False),
     free_shipping_only: bool = Query(False),
+    seller: str | None = Query(None),
     personal_seller_only: bool = Query(False),
     processed_only: bool = Query(False),
     contacted_only: bool = Query(False),
@@ -123,6 +124,7 @@ async def get_result_file_content(
             include_hidden=include_hidden,
             yhb_only=yhb_only,
             free_shipping_only=free_shipping_only,
+            seller=seller,
             personal_seller_only=personal_seller_only,
             processed_only=processed_only,
             contacted_only=contacted_only,
@@ -164,6 +166,7 @@ async def export_result_file_content(
     include_hidden: bool = Query(False),
     yhb_only: bool = Query(False),
     free_shipping_only: bool = Query(False),
+    seller: str | None = Query(None),
     personal_seller_only: bool = Query(False),
     processed_only: bool = Query(False),
     contacted_only: bool = Query(False),
@@ -189,6 +192,7 @@ async def export_result_file_content(
             include_hidden=include_hidden,
             yhb_only=yhb_only,
             free_shipping_only=free_shipping_only,
+            seller=seller,
             personal_seller_only=personal_seller_only,
             processed_only=processed_only,
             contacted_only=contacted_only,
@@ -379,4 +383,3 @@ async def get_seller_aggregation(
         "total_items": len(records),
         "sellers": sellers,
     }
-

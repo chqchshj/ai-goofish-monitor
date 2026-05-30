@@ -185,6 +185,9 @@ const enUS = {
       showAll: 'Show all',
       showLess: 'Show less',
       moreHidden: '{count} more sellers hidden',
+      activeFilter: 'Seller: {seller}',
+      clearFilter: 'Clear',
+      clearFilterAria: 'Clear seller filter',
     },
     grid: {
       loading: 'Loading results...',

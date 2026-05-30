@@ -41,6 +41,7 @@ export interface GetResultContentParams {
   include_hidden?: boolean;
   yhb_only?: boolean;
   free_shipping_only?: boolean;
+  seller?: string;
   personal_seller_only?: boolean;
   processed_only?: boolean;
   contacted_only?: boolean;
