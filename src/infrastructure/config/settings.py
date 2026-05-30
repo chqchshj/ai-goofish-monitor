@@ -94,6 +94,9 @@ class NotificationSettings(_EnvSettings):
     notification_dedup_window_seconds: int = _env_field(
         0, "NOTIFICATION_DEDUP_WINDOW_SECONDS", ge=0
     )
+    notification_seller_throttle_window_seconds: int = _env_field(
+        0, "NOTIFICATION_SELLER_THROTTLE_WINDOW_SECONDS", ge=0
+    )
 
     def has_any_notification_enabled(self) -> bool:
         """检查是否配置了任何通知服务"""

@@ -5,6 +5,10 @@ P4-1 起接入了通知降噪 seam:
 - 可选 ``policy`` (``NotificationPolicy``) 控制阈值与去重窗口。
 - 可选 ``dedup_store`` 配合 ``policy.dedup_window_seconds`` 抑制短窗口重复通知。
 
+P4-3 起增加了 seller throttle:
+- 可选 ``seller_throttle_store`` 配合 ``policy.seller_throttle_window_seconds``
+  抑制同一卖家在短窗口内重复通知。
+
 默认行为完全兼容: 不传 ``policy`` 时等价于 P3 时期的逻辑 ——
 ``ai_analysis.is_recommended`` 为真即通知, 否则不通知, 落盘照常。
 """
@@ -26,19 +30,22 @@ Saver = Callable[[dict, str], Awaitable[bool]]
 
 def _policy_from_env(
     settings,
-) -> tuple[Optional[NotificationPolicy], Optional[DedupStore]]:
-    """从 NotificationSettings 构造 (policy, dedup_store) 二元组。
+) -> tuple[Optional[NotificationPolicy], Optional[DedupStore], Optional[DedupStore]]:
+    """从 NotificationSettings 构造 (policy, dedup_store, seller_throttle_store) 三元组。
 
-    settings 缺失或所有字段为默认值时返回 (None, None), 调用方据此保留旧行为。
+    settings 缺失或所有字段为默认值时返回 (None, None, None), 调用方据此保留旧行为。
     settings 可以是 ``NotificationSettings``, 也可以是 duck-typed 对象, 只要有
     同名属性即可。这样 P4-2 把 UI 配置接进来时不需要改这里。
     """
     if settings is None:
-        return None, None
+        return None, None, None
 
     min_score = getattr(settings, "notification_min_score", None)
     min_level_raw = getattr(settings, "notification_min_level", None)
     dedup_window = getattr(settings, "notification_dedup_window_seconds", 0) or 0
+    seller_throttle_window = (
+        getattr(settings, "notification_seller_throttle_window_seconds", 0) or 0
+    )
 
     min_level: Optional[str] = None
     if isinstance(min_level_raw, str):
@@ -46,18 +53,27 @@ def _policy_from_env(
         if candidate in {"low", "medium", "high"}:
             min_level = candidate
 
-    if min_score is None and min_level is None and dedup_window <= 0:
-        return None, None
+    if (
+        min_score is None
+        and min_level is None
+        and dedup_window <= 0
+        and seller_throttle_window <= 0
+    ):
+        return None, None, None
 
     policy = NotificationPolicy(
         min_score=float(min_score) if min_score is not None else None,
         min_level=min_level,
         dedup_window_seconds=int(dedup_window),
+        seller_throttle_window_seconds=int(seller_throttle_window),
     )
-    store: Optional[DedupStore] = (
+    dedup_store: Optional[DedupStore] = (
         InMemoryDedupStore() if dedup_window > 0 else None
     )
-    return policy, store
+    seller_throttle_store: Optional[DedupStore] = (
+        InMemoryDedupStore() if seller_throttle_window > 0 else None
+    )
+    return policy, dedup_store, seller_throttle_store
 
 
 @dataclass(frozen=True)
@@ -79,11 +95,13 @@ class ResultPipelineService:
         notifier: Notifier,
         policy: Optional[NotificationPolicy] = None,
         dedup_store: Optional[DedupStore] = None,
+        seller_throttle_store: Optional[DedupStore] = None,
     ) -> None:
         self._saver = saver
         self._notifier = notifier
         self._policy = policy
         self._dedup_store = dedup_store
+        self._seller_throttle_store = seller_throttle_store
 
     @classmethod
     def from_settings(
@@ -106,8 +124,16 @@ class ResultPipelineService:
                 notification_settings = load_notification_settings()
             except Exception:
                 notification_settings = None
-        policy, store = _policy_from_env(notification_settings)
-        return cls(saver=saver, notifier=notifier, policy=policy, dedup_store=store)
+        policy, dedup_store, seller_throttle_store = _policy_from_env(
+            notification_settings
+        )
+        return cls(
+            saver=saver,
+            notifier=notifier,
+            policy=policy,
+            dedup_store=dedup_store,
+            seller_throttle_store=seller_throttle_store,
+        )
 
     async def persist_and_notify(
         self,
@@ -142,21 +168,25 @@ class ResultPipelineService:
                 record,
                 policy=self._policy,
                 dedup_store=self._dedup_store,
+                seller_throttle_store=self._seller_throttle_store,
             )
             if not decision.should_notify:
                 # 显式打印一行降噪日志, 便于运维确认 seam 在工作。
                 print(
                     f"   [通知] 已被降噪策略过滤: {decision.skip_reason} "
                     f"(score={decision.score:.1f}, level={decision.level}, "
-                    f"key={decision.dedup_key})"
+                    f"key={decision.dedup_key}, seller={decision.seller_throttle_key})"
                 )
                 return False, decision.skip_reason, decision
-        elif self._policy is not None and self._dedup_store is not None:
-            # inert 策略下也允许写入 dedup 时间, 让评估期切换不丢数据。
+        elif self._policy is not None and (
+            self._dedup_store is not None or self._seller_throttle_store is not None
+        ):
+            # inert 策略下也允许写入 dedup/seller 时间, 让评估期切换不丢数据。
             decision = evaluate_notification(
                 record,
                 policy=self._policy,
                 dedup_store=self._dedup_store,
+                seller_throttle_store=self._seller_throttle_store,
             )
 
         try:
