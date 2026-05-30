@@ -8,6 +8,9 @@ export type ResultFilters = Required<Pick<
   | 'yhb_only'
   | 'free_shipping_only'
   | 'personal_seller_only'
+  | 'processed_only'
+  | 'contacted_only'
+  | 'hide_processed'
   | 'sort'
 >>
 
@@ -21,6 +24,9 @@ export const DEFAULT_RESULT_FILTERS: ResultFilters = {
   yhb_only: false,
   free_shipping_only: false,
   personal_seller_only: false,
+  processed_only: false,
+  contacted_only: false,
+  hide_processed: false,
   sort: 'discovered_desc',
 }
 
@@ -31,6 +37,9 @@ export const BOOLEAN_RESULT_QUERY_KEYS = [
   'yhb_only',
   'free_shipping_only',
   'personal_seller_only',
+  'processed_only',
+  'contacted_only',
+  'hide_processed',
 ] as const
 
 export const VALID_RESULT_SORTS: ResultSort[] = [
@@ -70,6 +79,9 @@ export function parseResultFiltersFromQuery(query: ResultRouteQuery): ResultFilt
     yhb_only: parseResultBooleanQuery(query.yhb_only),
     free_shipping_only: parseResultBooleanQuery(query.free_shipping_only),
     personal_seller_only: parseResultBooleanQuery(query.personal_seller_only),
+    processed_only: parseResultBooleanQuery(query.processed_only),
+    contacted_only: parseResultBooleanQuery(query.contacted_only),
+    hide_processed: parseResultBooleanQuery(query.hide_processed),
     sort: parseResultSortQuery(query.sort),
   }
 }

@@ -243,6 +243,20 @@ export function useResults() {
     }
   }
 
+  async function toggleItemFlag(item: ResultItem, flag: 'is_processed' | 'is_contacted') {
+    if (!selectedFile.value) return
+    const itemId = item.商品信息?.商品ID
+    if (!itemId) return
+    const current = item[`_${flag}`] === true
+    const payload = { [flag]: !current }
+    try {
+      await resultsApi.updateItemFlags(selectedFile.value, itemId, payload)
+      await fetchResults()
+    } catch (e) {
+      if (e instanceof Error) error.value = e
+    }
+  }
+
   async function saveBlacklistRules(keywords: string[]) {
     if (!selectedFile.value) return
     isSavingBlacklist.value = true
@@ -344,6 +358,7 @@ export function useResults() {
     exportSelectedResults,
     deleteSelectedFile,
     toggleItemBlock,
+    toggleItemFlag,
     blacklistKeywords,
     isSavingBlacklist,
     saveBlacklistRules,

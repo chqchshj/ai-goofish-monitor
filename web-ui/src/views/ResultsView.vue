@@ -31,6 +31,7 @@ const {
   exportSelectedResults,
   deleteSelectedFile,
   toggleItemBlock,
+  toggleItemFlag,
   blacklistKeywords,
   isSavingBlacklist,
   saveBlacklistRules,
@@ -149,6 +150,9 @@ async function handleSaveBlacklistRules() {
       v-model:yhbOnly="filters.yhb_only"
       v-model:freeShippingOnly="filters.free_shipping_only"
       v-model:personalSellerOnly="filters.personal_seller_only"
+      v-model:processedOnly="filters.processed_only"
+      v-model:contactedOnly="filters.contacted_only"
+      v-model:hideProcessed="filters.hide_processed"
       v-model:sort="filters.sort"
       :is-loading="isLoading"
       @refresh="refreshResults"
@@ -159,7 +163,7 @@ async function handleSaveBlacklistRules() {
 
     <ResultsInsightsPanel :insights="insights" :selected-task-label="selectedTaskLabel" />
 
-    <ResultsGrid :results="results" :is-loading="isLoading" @toggle-block="toggleItemBlock" />
+    <ResultsGrid :results="results" :is-loading="isLoading" @toggle-block="toggleItemBlock" @toggle-flag="toggleItemFlag" />
 
     <Dialog v-model:open="isDeleteDialogOpen">
       <DialogContent class="sm:max-w-[420px]">

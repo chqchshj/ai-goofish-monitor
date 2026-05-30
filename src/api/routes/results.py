@@ -26,6 +26,7 @@ from src.services.result_storage_service import (
     result_file_exists,
     save_result_blacklist_keywords,
     update_item_status,
+    update_item_user_flags,
 )
 
 
@@ -92,6 +93,9 @@ async def get_result_file_content(
     yhb_only: bool = Query(False),
     free_shipping_only: bool = Query(False),
     personal_seller_only: bool = Query(False),
+    processed_only: bool = Query(False),
+    contacted_only: bool = Query(False),
+    hide_processed: bool = Query(False),
     sort: str | None = Query(None),
     sort_by: str = Query("crawl_time"),
     sort_order: str = Query("desc"),
@@ -118,6 +122,9 @@ async def get_result_file_content(
             yhb_only=yhb_only,
             free_shipping_only=free_shipping_only,
             personal_seller_only=personal_seller_only,
+            processed_only=processed_only,
+            contacted_only=contacted_only,
+            hide_processed=hide_processed,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -156,6 +163,9 @@ async def export_result_file_content(
     yhb_only: bool = Query(False),
     free_shipping_only: bool = Query(False),
     personal_seller_only: bool = Query(False),
+    processed_only: bool = Query(False),
+    contacted_only: bool = Query(False),
+    hide_processed: bool = Query(False),
     sort: str | None = Query(None),
     sort_by: str = Query("crawl_time"),
     sort_order: str = Query("desc"),
@@ -178,6 +188,9 @@ async def export_result_file_content(
             yhb_only=yhb_only,
             free_shipping_only=free_shipping_only,
             personal_seller_only=personal_seller_only,
+            processed_only=processed_only,
+            contacted_only=contacted_only,
+            hide_processed=hide_processed,
         )
         csv_text = build_results_csv(
             enrich_records_with_price_insight(results, filename)
@@ -208,6 +221,11 @@ class BlacklistRulesRequest(BaseModel):
     keywords: list[str]
 
 
+class UpdateUserFlagsRequest(BaseModel):
+    is_processed: bool | None = None
+    is_contacted: bool | None = None
+
+
 @router.patch("/{filename}/items/{item_id}/status")
 async def patch_item_status(filename: str, item_id: str, body: UpdateStatusRequest):
     """更新指定商品的状态（active/hidden/expired）"""
@@ -219,6 +237,27 @@ async def patch_item_status(filename: str, item_id: str, body: UpdateStatusReque
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return {"message": "状态已更新", "status": body.status.value}
+
+
+@router.patch("/{filename}/items/{item_id}/flags")
+async def patch_item_user_flags(filename: str, item_id: str, body: UpdateUserFlagsRequest):
+    """更新指定商品的用户标记（已处理/已联系）"""
+    if body.is_processed is None and body.is_contacted is None:
+        raise HTTPException(status_code=400, detail="至少需要提供一个标记字段")
+    try:
+        validate_result_filename(filename)
+        updated = await update_item_user_flags(
+            filename, item_id, is_processed=body.is_processed, is_contacted=body.is_contacted
+        )
+        if not updated:
+            raise HTTPException(status_code=404, detail="商品未找到")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {
+        "message": "标记已更新",
+        "is_processed": body.is_processed,
+        "is_contacted": body.is_contacted,
+    }
 
 
 @router.get("/{filename}/blacklist-rules")

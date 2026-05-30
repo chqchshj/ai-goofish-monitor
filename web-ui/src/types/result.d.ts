@@ -105,4 +105,6 @@ export interface ResultItem {
   _effective_hidden?: boolean;
   _hidden_reason?: 'manual' | 'rule' | 'expired' | null;
   _matched_blacklist_keywords?: string[];
+  _is_processed?: boolean;
+  _is_contacted?: boolean;
 }

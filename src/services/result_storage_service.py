@@ -51,10 +51,18 @@ def _fallback_unique_key(record: dict, item: dict) -> str:
     return f"hash:{digest}"
 
 
-def _parse_raw_record(raw_json: str, *, status: str | None = None) -> dict:
+def _parse_raw_record(
+    raw_json: str,
+    *,
+    status: str | None = None,
+    is_processed: int = 0,
+    is_contacted: int = 0,
+) -> dict:
     record = json.loads(raw_json)
     if status is not None:
         record["_status"] = status
+    record["_is_processed"] = bool(is_processed)
+    record["_is_contacted"] = bool(is_contacted)
     return record
 
 
@@ -259,6 +267,9 @@ def _load_filtered_records_from_conn(
     yhb_only: bool,
     free_shipping_only: bool,
     personal_seller_only: bool = False,
+    processed_only: bool = False,
+    contacted_only: bool = False,
+    hide_processed: bool = False,
 ) -> list[dict]:
     where_clause, params = _build_query_conditions(
         filename=filename,
@@ -268,7 +279,7 @@ def _load_filtered_records_from_conn(
     order_clause = _sort_expression(sort_by, sort_order)
     rows = conn.execute(
         f"""
-        SELECT raw_json, status
+        SELECT raw_json, status, is_processed, is_contacted
         FROM result_items
         WHERE {where_clause}
         ORDER BY {order_clause}
@@ -279,7 +290,12 @@ def _load_filtered_records_from_conn(
 
     records: list[dict] = []
     for row in rows:
-        record = _parse_raw_record(str(row["raw_json"]), status=row["status"])
+        record = _parse_raw_record(
+            str(row["raw_json"]),
+            status=row["status"],
+            is_processed=row["is_processed"],
+            is_contacted=row["is_contacted"],
+        )
         decorated = _decorate_record_visibility(record, row["status"], blacklist_keywords)
         if not (include_hidden or _is_record_visible(decorated)):
             continue
@@ -290,6 +306,12 @@ def _load_filtered_records_from_conn(
         ):
             continue
         if personal_seller_only and not _record_matches_personal_seller_filter(decorated):
+            continue
+        if processed_only and not decorated.get("_is_processed"):
+            continue
+        if contacted_only and not decorated.get("_is_contacted"):
+            continue
+        if hide_processed and decorated.get("_is_processed"):
             continue
         records.append(decorated)
     return records
@@ -414,6 +436,9 @@ async def query_result_records(
     yhb_only: bool = False,
     free_shipping_only: bool = False,
     personal_seller_only: bool = False,
+    processed_only: bool = False,
+    contacted_only: bool = False,
+    hide_processed: bool = False,
 ) -> tuple[int, list[dict]]:
     return await asyncio.to_thread(
         _query_result_records_sync,
@@ -428,6 +453,9 @@ async def query_result_records(
         yhb_only,
         free_shipping_only,
         personal_seller_only,
+        processed_only,
+        contacted_only,
+        hide_processed,
     )
 
 
@@ -443,6 +471,9 @@ def _query_result_records_sync(
     yhb_only: bool,
     free_shipping_only: bool,
     personal_seller_only: bool,
+    processed_only: bool = False,
+    contacted_only: bool = False,
+    hide_processed: bool = False,
 ) -> tuple[int, list[dict]]:
     bootstrap_sqlite_storage()
     offset = max(page - 1, 0) * limit
@@ -458,6 +489,9 @@ def _query_result_records_sync(
             yhb_only=yhb_only,
             free_shipping_only=free_shipping_only,
             personal_seller_only=personal_seller_only,
+            processed_only=processed_only,
+            contacted_only=contacted_only,
+            hide_processed=hide_processed,
         )
     total = len(records)
     return total, records[offset: offset + limit]
@@ -474,6 +508,9 @@ async def load_all_result_records(
     yhb_only: bool = False,
     free_shipping_only: bool = False,
     personal_seller_only: bool = False,
+    processed_only: bool = False,
+    contacted_only: bool = False,
+    hide_processed: bool = False,
 ) -> list[dict]:
     return await asyncio.to_thread(
         _load_all_result_records_sync,
@@ -486,6 +523,9 @@ async def load_all_result_records(
         yhb_only,
         free_shipping_only,
         personal_seller_only,
+        processed_only,
+        contacted_only,
+        hide_processed,
     )
 
 
@@ -499,6 +539,9 @@ def _load_all_result_records_sync(
     yhb_only: bool,
     free_shipping_only: bool,
     personal_seller_only: bool = False,
+    processed_only: bool = False,
+    contacted_only: bool = False,
+    hide_processed: bool = False,
 ) -> list[dict]:
     bootstrap_sqlite_storage()
     with sqlite_connection() as conn:
@@ -513,6 +556,9 @@ def _load_all_result_records_sync(
             yhb_only=yhb_only,
             free_shipping_only=free_shipping_only,
             personal_seller_only=personal_seller_only,
+            processed_only=processed_only,
+            contacted_only=contacted_only,
+            hide_processed=hide_processed,
         )
 
 
@@ -589,6 +635,46 @@ def _update_item_status_sync(filename: str, item_id: str, status: str) -> bool:
         cursor = conn.execute(
             "UPDATE result_items SET status = ? WHERE result_filename = ? AND item_id = ?",
             (status, filename, item_id),
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+
+
+async def update_item_user_flags(
+    filename: str,
+    item_id: str,
+    *,
+    is_processed: bool | None = None,
+    is_contacted: bool | None = None,
+) -> bool:
+    """Update user-managed boolean flags on a result item."""
+    return await asyncio.to_thread(
+        _update_item_user_flags_sync, filename, item_id, is_processed, is_contacted
+    )
+
+
+def _update_item_user_flags_sync(
+    filename: str,
+    item_id: str,
+    is_processed: bool | None,
+    is_contacted: bool | None,
+) -> bool:
+    bootstrap_sqlite_storage()
+    sets: list[str] = []
+    params: list = []
+    if is_processed is not None:
+        sets.append("is_processed = ?")
+        params.append(1 if is_processed else 0)
+    if is_contacted is not None:
+        sets.append("is_contacted = ?")
+        params.append(1 if is_contacted else 0)
+    if not sets:
+        return False
+    params.extend([filename, item_id])
+    with sqlite_connection() as conn:
+        cursor = conn.execute(
+            f"UPDATE result_items SET {', '.join(sets)} WHERE result_filename = ? AND item_id = ?",
+            tuple(params),
         )
         conn.commit()
         return cursor.rowcount > 0

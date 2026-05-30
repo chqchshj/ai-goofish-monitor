@@ -650,3 +650,163 @@ def test_results_blacklist_rules_hide_items_from_view_and_insights(tmp_path, mon
     assert download_resp.status_code == 200
     assert "MacBook Air Intel i5 8+256" in download_resp.text
     assert "MacBook Pro Intel 13寸" in download_resp.text
+
+
+def test_results_user_flags_toggle_and_filter(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    jsonl_dir = tmp_path / "jsonl"
+    jsonl_dir.mkdir(parents=True, exist_ok=True)
+    target_file = jsonl_dir / "flags_demo_full_data.jsonl"
+
+    records = [
+        {
+            "爬取时间": "2026-01-01T01:00:00",
+            "搜索关键字": "flags_demo",
+            "任务名称": "Flags Demo",
+            "商品信息": {
+                "商品ID": "3001",
+                "商品标题": "Item A",
+                "商品链接": "https://www.goofish.com/item?id=3001",
+                "当前售价": "¥100",
+                "发布时间": "2026-01-01 10:00",
+            },
+            "卖家信息": {"卖家昵称": "SellerA"},
+            "ai_analysis": {
+                "analysis_source": "ai",
+                "is_recommended": True,
+                "reason": "good deal",
+            },
+        },
+        {
+            "爬取时间": "2026-01-01T02:00:00",
+            "搜索关键字": "flags_demo",
+            "任务名称": "Flags Demo",
+            "商品信息": {
+                "商品ID": "3002",
+                "商品标题": "Item B",
+                "商品链接": "https://www.goofish.com/item?id=3002",
+                "当前售价": "¥200",
+                "发布时间": "2026-01-01 11:00",
+            },
+            "卖家信息": {"卖家昵称": "SellerB"},
+            "ai_analysis": {
+                "analysis_source": "keyword",
+                "is_recommended": False,
+                "keyword_hit_count": 0,
+            },
+        },
+    ]
+    _write_jsonl(target_file, records)
+
+    app = FastAPI()
+    app.include_router(results.router)
+    client = TestClient(app)
+
+    # Initially, both items are visible and neither is flagged
+    resp = client.get("/api/results/flags_demo_full_data.jsonl")
+    assert resp.status_code == 200
+    assert resp.json()["total_items"] == 2
+
+    # Mark item 3001 as processed
+    patch_resp = client.patch(
+        "/api/results/flags_demo_full_data.jsonl/items/3001/flags",
+        json={"is_processed": True},
+    )
+    assert patch_resp.status_code == 200
+    assert patch_resp.json()["is_processed"] is True
+
+    # Mark item 3002 as contacted
+    patch_resp = client.patch(
+        "/api/results/flags_demo_full_data.jsonl/items/3002/flags",
+        json={"is_contacted": True},
+    )
+    assert patch_resp.status_code == 200
+    assert patch_resp.json()["is_contacted"] is True
+
+    # Verify flags are persisted in GET response
+    resp = client.get("/api/results/flags_demo_full_data.jsonl")
+    items = resp.json()["items"]
+    item_a = next(i for i in items if i["商品信息"]["商品ID"] == "3001")
+    item_b = next(i for i in items if i["商品信息"]["商品ID"] == "3002")
+    assert item_a["_is_processed"] is True
+    assert item_a["_is_contacted"] is False
+    assert item_b["_is_processed"] is False
+    assert item_b["_is_contacted"] is True
+
+    # Filter: processed_only
+    resp = client.get(
+        "/api/results/flags_demo_full_data.jsonl",
+        params={"processed_only": True},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["total_items"] == 1
+    assert resp.json()["items"][0]["商品信息"]["商品ID"] == "3001"
+
+    # Filter: contacted_only
+    resp = client.get(
+        "/api/results/flags_demo_full_data.jsonl",
+        params={"contacted_only": True},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["total_items"] == 1
+    assert resp.json()["items"][0]["商品信息"]["商品ID"] == "3002"
+
+    # Filter: hide_processed
+    resp = client.get(
+        "/api/results/flags_demo_full_data.jsonl",
+        params={"hide_processed": True},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["total_items"] == 1
+    assert resp.json()["items"][0]["商品信息"]["商品ID"] == "3002"
+
+    # Toggle off: unmark processed
+    patch_resp = client.patch(
+        "/api/results/flags_demo_full_data.jsonl/items/3001/flags",
+        json={"is_processed": False},
+    )
+    assert patch_resp.status_code == 200
+
+    # Verify both visible again with hide_processed
+    resp = client.get(
+        "/api/results/flags_demo_full_data.jsonl",
+        params={"hide_processed": True},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["total_items"] == 2
+
+    # Empty body is rejected
+    empty_resp = client.patch(
+        "/api/results/flags_demo_full_data.jsonl/items/3001/flags",
+        json={},
+    )
+    assert empty_resp.status_code == 400
+
+    # Non-existent item is 404
+    missing_resp = client.patch(
+        "/api/results/flags_demo_full_data.jsonl/items/9999/flags",
+        json={"is_processed": True},
+    )
+    assert missing_resp.status_code == 404
+
+    # Export respects hide_processed filter — both items visible after unmark
+    export_resp = client.get(
+        "/api/results/flags_demo_full_data.jsonl/export",
+        params={"hide_processed": True},
+    )
+    assert export_resp.status_code == 200
+    assert "Item B" in export_resp.text
+    assert "Item A" in export_resp.text
+
+    # Re-mark 3001 as processed and verify export excludes it
+    client.patch(
+        "/api/results/flags_demo_full_data.jsonl/items/3001/flags",
+        json={"is_processed": True},
+    )
+    export_resp = client.get(
+        "/api/results/flags_demo_full_data.jsonl/export",
+        params={"hide_processed": True},
+    )
+    assert export_resp.status_code == 200
+    assert "Item B" in export_resp.text
+    assert "Item A" not in export_resp.text

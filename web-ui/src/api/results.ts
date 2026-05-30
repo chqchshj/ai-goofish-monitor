@@ -19,6 +19,9 @@ export interface GetResultContentParams {
   yhb_only?: boolean;
   free_shipping_only?: boolean;
   personal_seller_only?: boolean;
+  processed_only?: boolean;
+  contacted_only?: boolean;
+  hide_processed?: boolean;
   sort?: ResultSort;
   sort_by?: 'crawl_time' | 'publish_time' | 'price' | 'keyword_hit_count';
   sort_order?: 'asc' | 'desc';
@@ -84,5 +87,17 @@ export async function updateItemStatus(filename: string, itemId: string, status:
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ status }),
+  })
+}
+
+export async function updateItemFlags(
+  filename: string,
+  itemId: string,
+  flags: { is_processed?: boolean; is_contacted?: boolean }
+): Promise<{ message: string; is_processed?: boolean; is_contacted?: boolean }> {
+  return await http(`/api/results/${filename}/items/${itemId}/flags`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(flags),
   })
 }

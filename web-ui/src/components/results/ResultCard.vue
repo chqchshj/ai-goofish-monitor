@@ -10,7 +10,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import Badge from '@/components/ui/badge/Badge.vue'
-import { ExternalLink, TrendingUp, TrendingDown, Info, User, Clock, CheckCircle2, XCircle, AlertCircle, EyeOff, Eye } from 'lucide-vue-next'
+import { ExternalLink, TrendingUp, TrendingDown, Info, User, Clock, CheckCircle2, XCircle, AlertCircle, EyeOff, Eye, Phone } from 'lucide-vue-next'
 import { formatDateTime } from '@/i18n'
 
 interface Props {
@@ -20,6 +20,7 @@ interface Props {
 const props = defineProps<Props>()
 const emit = defineEmits<{
   (e: 'toggle-block', item: ResultItem): void
+  (e: 'toggle-flag', item: ResultItem, flag: 'is_processed' | 'is_contacted'): void
 }>()
 const { t } = useI18n()
 
@@ -43,6 +44,8 @@ const matchScore = ai?.value_score ?? 0
 const isHidden = computed(() => props.item._effective_hidden === true || props.item._status === 'hidden')
 const isRuleHidden = computed(() => props.item._hidden_reason === 'rule')
 const canToggleBlock = computed(() => props.item._hidden_reason !== 'rule' && props.item._hidden_reason !== 'expired')
+const isProcessed = computed(() => props.item._is_processed === true)
+const isContacted = computed(() => props.item._is_contacted === true)
 const hiddenLabel = computed(() => {
   if (props.item._hidden_reason === 'rule') return t('results.card.blacklisted')
   if (props.item._hidden_reason === 'expired') return t('results.card.expired')
@@ -183,9 +186,33 @@ const expanded = ref(false)
           <span>{{ crawlTime }}</span>
         </div>
       </div>
-      <a :href="info.商品链接" target="_blank" rel="noopener noreferrer" class="flex items-center gap-1 text-primary font-bold hover:gap-1.5 transition-all">
-        {{ t('results.card.detail') }} <ExternalLink class="w-3 h-3" />
-      </a>
+      <div class="flex items-center gap-2">
+        <button
+          type="button"
+          @click="emit('toggle-flag', props.item, 'is_processed')"
+          :aria-label="isProcessed ? t('results.card.markUnprocessed') : t('results.card.markProcessed')"
+          :title="isProcessed ? t('results.card.markUnprocessed') : t('results.card.markProcessed')"
+          class="flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors"
+          :class="isProcessed ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-slate-200 text-slate-500 hover:bg-slate-300'"
+        >
+          <CheckCircle2 class="w-3 h-3" />
+          {{ t('results.card.processed') }}
+        </button>
+        <button
+          type="button"
+          @click="emit('toggle-flag', props.item, 'is_contacted')"
+          :aria-label="isContacted ? t('results.card.markNotContacted') : t('results.card.markContacted')"
+          :title="isContacted ? t('results.card.markNotContacted') : t('results.card.markContacted')"
+          class="flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-medium transition-colors"
+          :class="isContacted ? 'bg-blue-100 text-blue-700 hover:bg-blue-200' : 'bg-slate-200 text-slate-500 hover:bg-slate-300'"
+        >
+          <Phone class="w-3 h-3" />
+          {{ t('results.card.contacted') }}
+        </button>
+        <a :href="info.商品链接" target="_blank" rel="noopener noreferrer" class="flex items-center gap-1 text-primary font-bold hover:gap-1.5 transition-all">
+          {{ t('results.card.detail') }} <ExternalLink class="w-3 h-3" />
+        </a>
+      </div>
     </CardFooter>
   </Card>
 </template>
