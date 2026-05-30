@@ -1,182 +1,145 @@
-# PR Draft: Parallel Refactor Batch — P3-1b / P3-2 / P4-2 + P4-1
+# PR Draft: xianyu-tools Stabilization & Result Management Batch
 
-**Branch:** local `master` (not pushed; includes the commits listed below)
+**Branch:** local `master` (not pushed; currently ahead of `origin/master`)
 **Prepared:** 2026-05-30
-**Verified by:** R5 validation pass (sonnet46), then operator review
+**Status:** local release-readiness draft; do not push/open PR/deploy until operator approval.
 
 ---
 
 ## Summary
 
-This batch lands three parallel refactor phases plus one follow-up seam, all
-delivered by the Codex/Opus47 worker lane and reviewed here:
+This batch turns the fork from a feature-complete prototype into a more stable day-to-day monitoring tool while preserving the runtime contract `scrape_xianyu(task_config, debug_limit)`.
 
-| Phase | Title | Commits |
-|-------|-------|---------|
-| P3-1b | Result sort regression tests + resultQuery refactor | 513402e |
-| P3-2  | Processed/contacted user flags (API + UI) | 25e7c3e |
-| P4-2  | Notification content enrichment (region, tags, badges, seller persona) | d3ab828 |
-| docs  | Stabilization & observability plan update | cd5966c |
-| P4-1  | Notification threshold + dedup seam (filter + policy + InMemoryDedupStore) | 4d0fdb7 + 0514187 + merge a705edb |
-| P4-3  | Notification per-seller throttle seam | merge (kb/p4-3-notification-seller-throttle) |
+Key outcomes:
+
+- Result management is now usable for real follow-up work: sort/query persistence, processed/contacted flags, batch operations, seller aggregation, and small seller-panel UX improvements.
+- Notifications are less noisy and more informative: enriched message content, env-only threshold/dedup controls, and per-seller throttling.
+- Operational handoff is clearer: local smoke runbook/script, fork upgrade checklist, notification throttle runbook, and final QA coverage.
 
 ---
 
-## Changes by Phase
+## Landed phases in this local branch
 
-### P3-1b — Result sort regression tests + resultQuery refactor
-**Commit:** `513402e`
-
-- `tests/integration/test_api_results.py`: +25 sort regression cases
-- `web-ui/src/composables/resultQuery.assertions.ts`: new assertion helpers (86 lines)
-- `web-ui/src/composables/resultQuery.ts`: extracted from useResults, +91 lines
-- `web-ui/src/composables/useResults.ts`: slimmed down (-85 lines, delegates to resultQuery)
-
-No backend schema changes. No service restart needed.
-
-### P3-2 — Processed/contacted user flags
-**Commit:** `25e7c3e`
-
-Backend:
-- `src/infrastructure/persistence/sqlite_connection.py`: **SQLite migration** — adds
-  `is_processed INTEGER NOT NULL DEFAULT 0` and `is_contacted INTEGER NOT NULL DEFAULT 0`
-  to `result_items` via `ALTER TABLE ... ADD COLUMN` (idempotent, safe on existing DB)
-- `src/api/routes/results.py`: new `PATCH /{filename}/items/{item_id}/flags` endpoint
-- `src/services/result_storage_service.py`: flag toggle + query filter logic (+92 lines)
-- Query params: `processed_only`, `contacted_only`, `hide_processed`
-- Export endpoint propagates filters
-
-Frontend:
-- `ResultCard.vue`: flag toggle buttons in card footer
-- `ResultsFilterBar.vue`: filter checkboxes
-- `ResultsGrid.vue`, `ResultsView.vue`: wired up
-- `resultQuery.ts` / `useResults.ts`: URL query persistence
-- i18n: `zh-CN.ts` + `en-US.ts` keys added
-
-**Deployment impact:**
-- Requires service restart (new API routes + migration runs on startup)
-- SQLite migration is additive/idempotent — safe on existing production DB
-- Frontend build required (included in this batch)
-
-### P4-2 — Notification content enrichment
-**Commit:** `d3ab828`
-
-- `src/infrastructure/external/notification_clients/base.py`: `NotificationMessage`
-  extended with `region`, `tags`, `free_shipping`, `inspection_service`,
-  `seller_nickname`, `seller_type_persona/status/comment`
-- `telegram_client.py`, `webhook_client.py`, `wecom_app_client.py`: render new fields
-- `result_pipeline_service.py`: passes `_seller_type_*` context keys from AI analysis
-- WeCom App TextCard: plain-text description only, no raw HTML links
-- Webhook: 8 new template vars (`${region}`, `${tags}`, `${badges}`, etc.)
-- 8 new unit tests; all 191 existing tests still pass
-
-**Deployment impact:**
-- Requires service restart
-- No schema changes
-- No frontend build required (backend-only)
-- Enriched fields are optional and default safely — zero behavior change if source
-  data is absent
-
-### P4-1 — Notification threshold + dedup seam
-**Commits:** `4d0fdb7`, `0514187`, merge `a705edb`
-
-- `src/services/notification_filter.py` (new, 374 lines):
-  - `derive_recommendation_score()` / `derive_recommendation_level()` pure functions
-  - `InMemoryDedupStore` (TTL-based, no DB writes)
-  - `NotificationPolicy` dataclass
-  - `evaluate_notification()` decision function
-- `src/infrastructure/config/settings.py`: 4 new env-only fields (P4-1 三项 + P4-3 一项):
-  - `NOTIFICATION_MIN_SCORE` (default: unset = no threshold)
-  - `NOTIFICATION_MIN_LEVEL` (default: unset = no threshold)
-  - `NOTIFICATION_DEDUP_WINDOW_SECONDS` (default: 0 = no dedup)
-  - `NOTIFICATION_SELLER_THROTTLE_WINDOW_SECONDS` (default: 0 = no seller throttle, P4-3)
-  - Intentionally NOT in `NOTIFICATION_FIELD_MAP` — not exposed via `/settings/notification` UI
-- `src/services/result_pipeline_service.py`: accepts optional `policy`/`dedup_store`;
-  `from_settings()` factory auto-derives from env; `ResultPipelineOutcome` gains
-  `skip_reason`/`decision` audit fields
-- `src/services/item_analysis_dispatcher.py`: default path uses `from_settings()`
-- 21 new unit tests (filter), +8 pipeline tests; 221 total pass
-
-**Deployment impact:**
-- Requires service restart
-- No schema changes, no frontend build
-- **Zero behavior change by default** — all thresholds unset, dedup disabled
-- To activate: set env vars in `.env` and restart
+| Phase | Title | Representative commits |
+|-------|-------|------------------------|
+| P3-1b | Result sort regression tests + resultQuery refactor | `513402e` |
+| P3-2 | Processed/contacted result user flags | `25e7c3e` |
+| P4-2 | Notification content enrichment | `d3ab828` |
+| P4-1 | Notification threshold + item dedup seam | `4d0fdb7`, `0514187`, merge `a705edb` |
+| P3-3 | Result batch operations | `4d1e270`, `803f295`, merge `f118968` |
+| D6 | Fork upgrade / redeploy checklist | `0c8a135`, merge `d7ac1ee` |
+| P4-3 | Per-seller notification throttling seam | `ec9ab61`, merge `c3d417a` |
+| P3-4 | Seller aggregation endpoint + panel | `1ed5235`, `bcedb6f`, merge `cb5d459` |
+| A8 | Result API/frontend type contract tightening | `f533b84`, merge `9d8d569` |
+| Q7 | Result-management QA edge-case tests | `297111e`, merge `742f162` |
+| D7 | Notification throttle runbook / env docs | `c682263`, merge `c51e017` |
+| P3-5 | Seller-level next-step design + top-N seller panel UX | `69630dc`, merge `fe5a789` |
 
 ---
 
-## In-Progress Phases (not in this batch)
+## Changes by area
 
-| Phase | Status | Notes |
-|-------|--------|-------|
-| P4-1  | Landed | Included above (merged after batch started) |
-| P3-3  | Running | Result batch operations: select, mark, hide, export |
-| P3-4  | Running | Seller aggregation result view seam |
+### Result management
+
+- URL/query behavior:
+  - canonical combined `sort` param with legacy `sort_by` / `sort_order` compatibility
+  - result filters survive refresh/share via URL query
+- User-state flags:
+  - `_is_processed` and `_is_contacted` stored separately from visibility `_status`
+  - filters: `processed_only`, `contacted_only`, `hide_processed`
+  - CSV export honors active filters
+- Batch operations:
+  - `PATCH /api/results/{filename}/items/batch`
+  - supports batch `status`, `is_processed`, `is_contacted`
+  - frontend selection toolbar: mark processed/contacted, hide/unhide, clear, export current filter
+- Seller aggregation:
+  - `GET /api/results/{filename}/sellers`
+  - seller count, item count, price range, latest crawl time, recommendation count, seller-persona summary
+  - SellersPanel shows top sellers, now with top-N expand/collapse
+
+### Notification strategy
+
+- Enriched content:
+  - region, tags, free shipping, inspection-service badge, seller nickname, seller-persona context
+  - WeCom App TextCard keeps description plain text and URL in `textcard.url`
+- Env-only noise controls, all disabled by default:
+  - `NOTIFICATION_MIN_SCORE`
+  - `NOTIFICATION_MIN_LEVEL`
+  - `NOTIFICATION_DEDUP_WINDOW_SECONDS`
+  - `NOTIFICATION_SELLER_THROTTLE_WINDOW_SECONDS`
+- Runtime behavior:
+  - zero behavior change when env vars are unset / `0`
+  - item dedup and seller throttle are in-memory TTL stores; restart clears them
+  - operational rollout/rollback documented in `docs/runbooks/notification-throttle-ops.md`
+
+### Documentation and operations
+
+- `docs/runbooks/local-smoke.md` and `scripts/smoke_check.py` for non-mutating local smoke.
+- README fork upgrade / redeploy checklist refreshed.
+- `docs/runbooks/notification-throttle-ops.md` added as notification-throttle runbook.
+- `docs/notes/p3-5-seller-level-next-step.md` records seller-level next-step decision:
+  - seller details/filter/compare can reuse existing result items and aggregation data without schema changes
+  - persistent seller watch/notes require a new table or config store and should be a separate confirmed feature
 
 ---
 
-## Verification Results (R5, 2026-05-30)
+## Deployment impact
 
-```
-git diff --check origin/master..HEAD   → EXIT:0 (no whitespace errors)
-python3 -m compileall src/ -q          → COMPILE_EXIT:0 (clean)
-pytest -q                              → 221 passed, 3 skipped, 1 warning in 2.53s
-vite build                             → ✓ built in 8.98s
+- Requires service restart to load backend/API changes and env-only notification controls.
+- Requires frontend rebuild because result UI and settings/result components changed.
+- SQLite migration impact:
+  - P3-2 adds `is_processed` and `is_contacted` to `result_items`
+  - additive/idempotent `ALTER TABLE ... ADD COLUMN`
+  - no destructive migration
+- No production `.env`, cookies, `state/`, NAS files, or real user data were changed by this local work.
+- Optional notification-throttle env vars are safe to leave unset.
+
+---
+
+## Verification snapshot
+
+Latest local verification after merging P3-5:
+
+```bash
+git diff --check                                            # pass
+/tmp/xianyu-tools-r4-venv/bin/python -m pytest   tests/integration/test_api_seller_aggregation.py   tests/integration/test_api_results.py -q                  # 15 passed
+cd web-ui && npm run build                                  # pass
 ```
 
-Test breakdown:
-- 221 unit + integration tests pass
-- 3 skipped (marked `live` — require real credentials/external services)
-- 1 warning: httpx/starlette deprecation (cosmetic, not a failure)
+Earlier review gates also ran targeted/full suites, including:
+
+- Q7: result API + QA edge tests, full suite reported green by worker (`242 passed, 3 skipped` at that point)
+- A8: result API/seller aggregation targeted tests + frontend build
+- D7: markdown-only `git diff --check`
+- P3/P4 implementation cards: targeted unit/integration tests per task handoff
+
+Before push/deploy, run final M9 quality gate:
+
+```bash
+cd /root/projects/xianyu-tools
+git diff --check
+/tmp/xianyu-tools-r4-venv/bin/python -m pytest -q
+cd web-ui && npm run build
+```
 
 ---
 
-## Deployment Checklist
+## Release checklist
 
-- [ ] `git push origin master` (or open PR from this branch)
-- [ ] On NAS: `docker compose pull && docker compose up -d` (or rebuild from fork)
-- [ ] Verify migration ran: check `result_items` has `is_processed`/`is_contacted` columns
-- [ ] Verify new flag buttons appear in ResultCard footer
-- [ ] Optional: set `NOTIFICATION_MIN_SCORE` / `NOTIFICATION_DEDUP_WINDOW_SECONDS` / `NOTIFICATION_SELLER_THROTTLE_WINDOW_SECONDS` in `.env`
-      to activate P4-1 threshold/dedup or P4-3 per-seller throttle (safe to leave unset; see `docs/runbooks/notification-throttle-ops.md` for staged rollout and rollback)
-- [ ] No rollback risk on schema: all `ALTER TABLE` are additive with DEFAULT values
+- [ ] Run final M9 quality gate on current `master`.
+- [ ] Push local `master` or open a PR only after user approval.
+- [ ] Rebuild/redeploy target service only after user approval.
+- [ ] Confirm production `.env` intentionally leaves notification thresholds unset, or apply staged rollout from `docs/runbooks/notification-throttle-ops.md`.
+- [ ] After restart, verify:
+  - result page loads and flags/batch operations render
+  - seller panel renders and expand/collapse works
+  - existing task execution still calls `scrape_xianyu(task_config, debug_limit)` normally
+  - notification channels still work with existing settings
 
 ---
 
-## Files Changed (summary)
+## Known follow-ups / not included
 
-Backend (src/):
-- `src/api/routes/results.py` (+39)
-- `src/infrastructure/config/settings.py` (+20)
-- `src/infrastructure/external/notification_clients/base.py` (+28)
-- `src/infrastructure/external/notification_clients/telegram_client.py` (+11)
-- `src/infrastructure/external/notification_clients/webhook_client.py` (+17)
-- `src/infrastructure/external/notification_clients/wecom_app_client.py` (+14)
-- `src/infrastructure/persistence/sqlite_connection.py` (+22, migration)
-- `src/services/item_analysis_dispatcher.py` (+8)
-- `src/services/notification_filter.py` (new, +374)
-- `src/services/result_pipeline_service.py` (+126+17=+143)
-- `src/services/result_storage_service.py` (+92)
-
-Tests:
-- `tests/integration/test_api_results.py` (+160+25=+185)
-- `tests/unit/test_notification_filter.py` (new, +258)
-- `tests/unit/test_notification_service.py` (+356)
-- `tests/unit/test_result_pipeline_service.py` (+187+8=+195)
-
-Frontend (web-ui/src/):
-- `api/results.ts` (+15)
-- `components/results/ResultCard.vue` (+35)
-- `components/results/ResultsFilterBar.vue` (+33)
-- `components/results/ResultsGrid.vue` (+3)
-- `composables/resultQuery.assertions.ts` (new, +86)
-- `composables/resultQuery.ts` (+91+12=+103)
-- `composables/useResults.ts` (+15-85=-70)
-- `i18n/messages/en-US.ts` (+9)
-- `i18n/messages/zh-CN.ts` (+9)
-- `types/result.d.ts` (+2)
-- `views/ResultsView.vue` (+6)
-
-Docs:
-- `AGENTS.md` (+15)
-- `docs/plans/2026-05-30-stabilization-and-observability.md` (+14)
+- Seller detail/filter route can be a small no-schema follow-up PR.
+- Persistent seller watchlist / seller notes need schema or config-store design and explicit confirmation before implementation.
+- No GitHub push, PR creation, NAS deploy, production restart, or production DB write has been executed in this batch.
