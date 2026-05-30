@@ -151,6 +151,8 @@ cd /root/projects/xianyu-tools
 - The combined `sort` query parameter is canonical and takes precedence over legacy `sort_by` / `sort_order` when both are present; invalid combined `sort` values fall back to the legacy pair for compatibility.
 - Result filters are represented in the URL query so the result page can be refreshed or shared without losing state.
 - `lastSelectedResultFile` is only a fallback when the URL has no `file` query parameter.
+- User-state flags are stored separately from visibility `status`: `_is_processed` and `_is_contacted` are boolean markers on result items, while `status` continues to represent active/hidden/expired visibility.
+- `processed_only`, `contacted_only`, and `hide_processed` are URL/API filters and are also honored by CSV export.
 
 **Verification:**
 ```bash
@@ -179,6 +181,13 @@ cd web-ui && npm run build
 - Dedup window by item ID / normalized URL.
 - Per-seller throttling window.
 - Richer notification content: price, region, YHB/free-shipping labels, AI personal-seller reason, direct link.
+
+**Notification content contract:**
+- Channel clients build notifications from a shared `NotificationMessage` object; enriched fields are optional and must default safely when source data is absent.
+- Product data may contribute `发货地区`, `商品标签`, `卖家昵称`, and boolean badge semantics for 验货宝 / 包邮.
+- Seller-persona context is passed through underscore-prefixed pipeline keys such as `_seller_type_persona`, `_seller_type_status`, and `_seller_type_comment` to avoid colliding with raw product fields.
+- Enterprise WeChat TextCard descriptions must remain plain readable text: do not embed raw HTML links in `description`; put the clickable URL in `textcard.url`.
+- Webhook templates may use `${region}`, `${tags}`, `${badges}`, `${free_shipping}`, `${inspection_service}`, `${seller_nickname}`, `${seller_type_persona}`, `${seller_type_status}`, and `${seller_type_comment}`.
 
 **Verification:**
 ```bash
