@@ -1,4 +1,4 @@
-import type { ResultInsights, ResultItem } from '@/types/result.d.ts'
+import type { ResultInsights, ResultItem, ResultItemStatus } from '@/types/result.d.ts'
 import { http } from '@/lib/http'
 
 export type ResultSort =
@@ -14,7 +14,7 @@ export type ResultSort =
 
 export interface BatchUpdateItemsPayload {
   item_ids: string[];
-  status?: 'active' | 'hidden' | 'expired';
+  status?: ResultItemStatus;
   is_processed?: boolean;
   is_contacted?: boolean;
 }
@@ -23,9 +23,15 @@ export interface BatchUpdateItemsResponse {
   message: string;
   requested_count: number;
   updated_count: number;
-  status?: string | null;
-  is_processed?: boolean | null;
-  is_contacted?: boolean | null;
+  status: ResultItemStatus | null;
+  is_processed: boolean | null;
+  is_contacted: boolean | null;
+}
+
+export interface UpdateItemFlagsResponse {
+  message: string;
+  is_processed: boolean | null;
+  is_contacted: boolean | null;
 }
 
 export interface GetResultContentParams {
@@ -115,7 +121,7 @@ export function downloadResultExport(filename: string, params: GetResultContentP
   document.body.removeChild(link)
 }
 
-export async function updateItemStatus(filename: string, itemId: string, status: string): Promise<{ message: string; status: string }> {
+export async function updateItemStatus(filename: string, itemId: string, status: ResultItemStatus): Promise<{ message: string; status: ResultItemStatus }> {
   return await http(`/api/results/${filename}/items/${itemId}/status`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -127,7 +133,7 @@ export async function updateItemFlags(
   filename: string,
   itemId: string,
   flags: { is_processed?: boolean; is_contacted?: boolean }
-): Promise<{ message: string; is_processed?: boolean; is_contacted?: boolean }> {
+): Promise<UpdateItemFlagsResponse> {
   return await http(`/api/results/${filename}/items/${itemId}/flags`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },

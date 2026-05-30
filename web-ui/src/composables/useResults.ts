@@ -2,6 +2,7 @@ import { ref, reactive, watch, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import type { ResultInsights, ResultItem } from '@/types/result.d.ts'
+import type { ResultItemStatus } from '@/types/result.d.ts'
 import * as resultsApi from '@/api/results'
 import type { GetSellerAggregationResponse } from '@/api/results'
 import { useWebSocket } from '@/composables/useWebSocket'
@@ -292,7 +293,7 @@ export function useResults() {
     if (!selectedFile.value) return
     const itemId = item.商品信息?.商品ID
     if (!itemId) return
-    const newStatus = item._status === 'hidden' ? 'active' : 'hidden'
+    const newStatus: ResultItemStatus = item._status === 'hidden' ? 'active' : 'hidden'
     try {
       await resultsApi.updateItemStatus(selectedFile.value, itemId, newStatus)
       await fetchResults()
