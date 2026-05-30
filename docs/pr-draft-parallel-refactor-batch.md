@@ -34,6 +34,9 @@ Key outcomes:
 | Q7 | Result-management QA edge-case tests | `297111e`, merge `742f162` |
 | D7 | Notification throttle runbook / env docs | `c682263`, merge `c51e017` |
 | P3-5 | Seller-level next-step design + top-N seller panel UX | `69630dc`, merge `fe5a789` |
+| R7 | PR draft refresh + validation | `d25113c`, merge `44aed76` |
+| M9-2 | Seller click-through filter UX | `21ebd93`, merge `bfc3a04` |
+| M9-3 | Disposable smoke + packaging verification | (smoke-only; no source change) |
 
 ---
 
@@ -56,6 +59,10 @@ Key outcomes:
   - `GET /api/results/{filename}/sellers`
   - seller count, item count, price range, latest crawl time, recommendation count, seller-persona summary
   - SellersPanel shows top sellers, now with top-N expand/collapse
+- Seller click-through filter (M9-2):
+  - `seller` query parameter filters result list and CSV export by seller nickname
+  - no schema change; matching uses `卖家信息.卖家昵称` with `商品信息.卖家昵称` fallback
+  - SellersPanel click applies the URL-persisted seller filter and shows a clearable active-filter chip
 
 ### Notification strategy
 
@@ -98,22 +105,24 @@ Key outcomes:
 
 ## Verification snapshot
 
-Latest local verification after merging P3-5:
+Latest local verification after merging M9-2 (seller click filter) and M9-3 (disposable smoke):
 
 ```bash
 git diff --check                                            # pass
-/tmp/xianyu-tools-r4-venv/bin/python -m pytest   tests/integration/test_api_seller_aggregation.py   tests/integration/test_api_results.py -q                  # 15 passed
+/tmp/xianyu-tools-r4-venv/bin/python -m pytest -q         # 248 passed, 3 skipped (M9-3 smoke run)
 cd web-ui && npm run build                                  # pass
 ```
 
 Earlier review gates also ran targeted/full suites, including:
 
+- M9-3: disposable smoke + packaging verification; 16 targeted tests, web-ui build, smoke_check, openapi check — all pass
+- M9-2: seller click filter — backend result/export seller query coverage added to `test_api_results.py`; targeted result/seller suite passed; no schema change
 - Q7: result API + QA edge tests, full suite reported green by worker (`242 passed, 3 skipped` at that point)
 - A8: result API/seller aggregation targeted tests + frontend build
 - D7: markdown-only `git diff --check`
 - P3/P4 implementation cards: targeted unit/integration tests per task handoff
 
-Before push/deploy, run final M9 quality gate:
+Before push/deploy, run final quality gate:
 
 ```bash
 cd /root/projects/xianyu-tools
@@ -126,7 +135,7 @@ cd web-ui && npm run build
 
 ## Release checklist
 
-- [ ] Run final M9 quality gate on current `master`.
+- [x] M9-3 quality gate passed: `git diff --check`, `pytest -q` (248 passed, 3 skipped), `web-ui npm run build`.
 - [ ] Push local `master` or open a PR only after user approval.
 - [ ] Rebuild/redeploy target service only after user approval.
 - [ ] Confirm production `.env` intentionally leaves notification thresholds unset, or apply staged rollout from `docs/runbooks/notification-throttle-ops.md`.

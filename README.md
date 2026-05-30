@@ -78,7 +78,7 @@ docker compose up -d
 1. 更新代码后先确认 `docker-compose.yaml` 仍从当前源码构建本 fork 镜像：默认镜像名为 `xianyu-tools:local`，不要误切回上游 `ghcr.io/usagi-org/ai-goofish:latest`，否则企业微信应用通知、任务级通知目标、验货宝/包邮/个人卖家筛选等 fork-only 功能可能缺失。
 2. 重新构建前端与镜像：本地开发可运行 `cd web-ui && npm run build`；Docker 部署建议运行 `docker compose up --build -d`，让镜像包含最新 `dist/` 与后端代码。
 3. 重启服务后检查日志和健康接口：`docker compose logs -f app`、`python3 scripts/smoke_check.py --base-url http://127.0.0.1:8000`。不要在生产 `.env` / `state/` / SQLite 上运行会创建任务或改设置的冒烟脚本。
-4. SQLite 迁移是启动时自动执行的 additive migration：当前批次只会用 `ALTER TABLE ... ADD COLUMN` 为 `result_items` 增加 `is_processed` / `is_contacted` 默认字段，不会删除或重写旧数据。升级前仍建议备份 `data/app.sqlite3`。
+4. SQLite 迁移是启动时自动执行的 additive migration：当前批次只会用 `ALTER TABLE ... ADD COLUMN` 为 `result_items` 增加 `is_processed` / `is_contacted`（P3-2）默认字段，不会删除或重写旧数据。M9-2 的卖家点击筛选是无 schema 的 query/filter 改动。升级前仍建议备份 `data/app.sqlite3`。
 5. P4-1 / P4-3 通知降噪与限流开关默认关闭：`NOTIFICATION_MIN_SCORE`、`NOTIFICATION_MIN_LEVEL`、`NOTIFICATION_DEDUP_WINDOW_SECONDS`、`NOTIFICATION_SELLER_THROTTLE_WINDOW_SECONDS` 留空/为 0 时行为保持旧版（AI 推荐即通知）。这 4 个字段刻意不进 `/settings/notification` UI，只能通过 `.env` 配置后重启服务生效；启用顺序、风险和回滚步骤见 `docs/runbooks/notification-throttle-ops.md`。
 6. 本仓库文档仅说明本地构建与升级步骤；发布到远端、打开 PR、NAS 部署或生产数据写入需要单独执行和确认。
 
