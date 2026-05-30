@@ -26,6 +26,12 @@ const { t } = useI18n()
     </div>
   </div>
   <div class="grid gap-2 sm:grid-cols-4 sm:items-center sm:gap-4">
+    <Label for="yhb-only" class="sm:text-right">{{ t('tasks.form.yhbOnly') }}</Label>
+    <div class="sm:col-span-3">
+      <Switch id="yhb-only" v-model="form.yhb_only" />
+    </div>
+  </div>
+  <div class="grid gap-2 sm:grid-cols-4 sm:items-center sm:gap-4">
     <Label class="sm:text-right">{{ t('tasks.form.newPublish') }}</Label>
     <div class="sm:col-span-3">
       <Select v-model="form.new_publish_option as any">

@@ -127,22 +127,66 @@ function handleSubmit() {
 
 <template>
   <form :id="formId || 'task-form'" @submit.prevent="handleSubmit">
-    <div class="grid gap-6 py-4">
-      <TaskBasicFields :form="form" />
-      <TaskDecisionMode :form="form" />
-      <TaskKeywordRules v-if="form.decision_mode === 'keyword'" v-model="keywordRulesInput" />
-      <TaskFilterFields :form="form" />
-      <TaskScheduleFields :form="form" v-model:cron-mode="cronMode" />
-      <TaskAccountStrategy
-        v-model:account-strategy="accountStrategy"
-        v-model:selected-account-state-file="selectedAccountStateFile"
-        :account-options="accountOptions"
-      />
-      <TaskSellerPublicationFields :form="form" />
-      <TaskNotificationTargets
-        :model-value="form.notification_targets || []"
-        @update:model-value="updateNotificationTargets"
-      />
+    <div class="grid gap-3 py-4">
+      <details class="group rounded-md border bg-background" open>
+        <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
+          <span>{{ t('tasks.form.sections.basic') }}</span>
+          <span class="text-gray-500 transition-transform group-open:rotate-90" aria-hidden="true">&gt;</span>
+        </summary>
+        <div class="grid gap-6 border-t px-4 py-4">
+          <TaskBasicFields :form="form" />
+        </div>
+      </details>
+
+      <details class="group rounded-md border bg-background" open>
+        <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
+          <span>{{ t('tasks.form.sections.decision') }}</span>
+          <span class="text-gray-500 transition-transform group-open:rotate-90" aria-hidden="true">&gt;</span>
+        </summary>
+        <div class="grid gap-6 border-t px-4 py-4">
+          <TaskDecisionMode :form="form" />
+          <TaskKeywordRules v-if="form.decision_mode === 'keyword'" v-model="keywordRulesInput" />
+        </div>
+      </details>
+
+      <details class="group rounded-md border bg-background" open>
+        <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
+          <span>{{ t('tasks.form.sections.search') }}</span>
+          <span class="text-gray-500 transition-transform group-open:rotate-90" aria-hidden="true">&gt;</span>
+        </summary>
+        <div class="grid gap-6 border-t px-4 py-4">
+          <TaskFilterFields :form="form" />
+          <TaskSellerPublicationFields :form="form" />
+        </div>
+      </details>
+
+      <details class="group rounded-md border bg-background">
+        <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
+          <span>{{ t('tasks.form.sections.scheduleAccount') }}</span>
+          <span class="text-gray-500 transition-transform group-open:rotate-90" aria-hidden="true">&gt;</span>
+        </summary>
+        <div class="grid gap-6 border-t px-4 py-4">
+          <TaskScheduleFields :form="form" v-model:cron-mode="cronMode" />
+          <TaskAccountStrategy
+            v-model:account-strategy="accountStrategy"
+            v-model:selected-account-state-file="selectedAccountStateFile"
+            :account-options="accountOptions"
+          />
+        </div>
+      </details>
+
+      <details class="group rounded-md border bg-background">
+        <summary class="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium [&::-webkit-details-marker]:hidden">
+          <span>{{ t('tasks.form.sections.notifications') }}</span>
+          <span class="text-gray-500 transition-transform group-open:rotate-90" aria-hidden="true">&gt;</span>
+        </summary>
+        <div class="grid gap-6 border-t px-4 py-4">
+          <TaskNotificationTargets
+            :model-value="form.notification_targets || []"
+            @update:model-value="updateNotificationTargets"
+          />
+        </div>
+      </details>
     </div>
   </form>
 </template>

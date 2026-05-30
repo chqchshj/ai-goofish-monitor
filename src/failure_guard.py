@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import time
@@ -76,14 +77,43 @@ def _get_mtime(path: Optional[str]) -> Optional[float]:
         return None
 
 
+def _cookie_fingerprint(path: Optional[str]) -> Optional[dict[str, Any]]:
+    if not path:
+        return None
+    try:
+        stat = os.stat(path)
+        digest = hashlib.sha256()
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return {
+            "mtime_ns": stat.st_mtime_ns,
+            "size": stat.st_size,
+            "sha256": digest.hexdigest(),
+        }
+    except OSError:
+        return None
+
+
 def _cookie_changed(
-    cookie_path: Optional[str], previous_mtime: Optional[float]
+    cookie_path: Optional[str],
+    previous_mtime: Optional[float],
+    previous_fingerprint: Optional[dict[str, Any]] = None,
 ) -> bool:
     if not cookie_path:
         return False
+
+    current_fingerprint = _cookie_fingerprint(cookie_path)
+    if current_fingerprint is None:
+        return False
+
+    if previous_fingerprint:
+        return current_fingerprint != previous_fingerprint
+
     current = _get_mtime(cookie_path)
     if current is None or previous_mtime is None:
         return False
+    # Backward compatibility for existing guard files that only have cookie_mtime.
     return current > (previous_mtime + 1e-6)
 
 
@@ -213,6 +243,7 @@ class FailureGuard:
                 "last_success_at": _dt_to_str(current),
                 "cookie_path": None,
                 "cookie_mtime": None,
+                "cookie_fingerprint": None,
             }
 
         self._update_task(task_key, _reset)
@@ -238,6 +269,9 @@ class FailureGuard:
         last_notified_date = entry.get("last_notified_date")
 
         previous_cookie_mtime = entry.get("cookie_mtime")
+        previous_cookie_fingerprint = entry.get("cookie_fingerprint")
+        if not isinstance(previous_cookie_fingerprint, dict):
+            previous_cookie_fingerprint = None
         if cookie_path and previous_cookie_mtime is not None:
             try:
                 previous_cookie_mtime = float(previous_cookie_mtime)
@@ -248,7 +282,11 @@ class FailureGuard:
             paused_until
             and paused_until > current
             and cookie_path
-            and _cookie_changed(cookie_path, previous_cookie_mtime)
+            and _cookie_changed(
+                cookie_path,
+                previous_cookie_mtime,
+                previous_cookie_fingerprint,
+            )
         ):
             # cookies / 登录态更新 => 自动恢复
             self.record_success(task_key, now=current)
@@ -300,6 +338,7 @@ class FailureGuard:
         current = _now(self.tz_name, now=now)
         today = _today_str(self.tz_name, now=current)
         cookie_mtime = _get_mtime(cookie_path)
+        cookie_fingerprint = _cookie_fingerprint(cookie_path)
 
         effective_threshold = max(1, int(min_failures_to_pause or self.threshold))
 
@@ -320,8 +359,11 @@ class FailureGuard:
                 prev_mtime = float(prev_mtime) if prev_mtime is not None else None
             except (TypeError, ValueError):
                 prev_mtime = None
+            prev_fingerprint = entry.get("cookie_fingerprint")
+            if not isinstance(prev_fingerprint, dict):
+                prev_fingerprint = None
 
-            if cookie_path and _cookie_changed(cookie_path, prev_mtime):
+            if cookie_path and _cookie_changed(cookie_path, prev_mtime, prev_fingerprint):
                 entry["consecutive_failures"] = 0
                 entry["paused_until"] = None
                 entry["last_notified_date"] = None
@@ -334,6 +376,8 @@ class FailureGuard:
                 entry["cookie_path"] = cookie_path
                 if cookie_mtime is not None:
                     entry["cookie_mtime"] = cookie_mtime
+                if cookie_fingerprint is not None:
+                    entry["cookie_fingerprint"] = cookie_fingerprint
 
             opened = False
             if consecutive >= effective_threshold:

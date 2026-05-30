@@ -19,6 +19,7 @@ def _row_to_task(row) -> Task:
     payload["analyze_images"] = bool(payload["analyze_images"])
     payload["personal_only"] = bool(payload["personal_only"])
     payload["free_shipping"] = bool(payload["free_shipping"])
+    payload["yhb_only"] = bool(payload.get("yhb_only", False))
     payload["is_running"] = bool(payload["is_running"])
     payload["keyword_rules"] = json.loads(payload.pop("keyword_rules_json") or "[]")
     payload["notification_targets"] = json.loads(
@@ -94,14 +95,14 @@ class SqliteTaskRepository(TaskRepository):
                     id, task_name, enabled, keyword, description, analyze_images,
                     max_pages, personal_only, min_price, max_price, cron,
                     ai_prompt_base_file, ai_prompt_criteria_file, account_state_file,
-                    account_strategy, free_shipping, new_publish_option, region,
+                    account_strategy, free_shipping, yhb_only, new_publish_option, region,
                     decision_mode, keyword_rules_json, notification_targets_json,
                     is_running
                 ) VALUES (
                     :id, :task_name, :enabled, :keyword, :description, :analyze_images,
                     :max_pages, :personal_only, :min_price, :max_price, :cron,
                     :ai_prompt_base_file, :ai_prompt_criteria_file, :account_state_file,
-                    :account_strategy, :free_shipping, :new_publish_option, :region,
+                    :account_strategy, :free_shipping, :yhb_only, :new_publish_option, :region,
                     :decision_mode, :keyword_rules_json, :notification_targets_json,
                     :is_running
                 )
@@ -131,6 +132,7 @@ class SqliteTaskRepository(TaskRepository):
         values["analyze_images"] = int(task.analyze_images)
         values["personal_only"] = int(task.personal_only)
         values["free_shipping"] = int(task.free_shipping)
+        values["yhb_only"] = int(task.yhb_only)
         values["is_running"] = int(task.is_running)
         values["keyword_rules_json"] = json.dumps(task.keyword_rules or [], ensure_ascii=False)
         values["notification_targets_json"] = json.dumps(

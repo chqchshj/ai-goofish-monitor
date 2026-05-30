@@ -10,7 +10,7 @@ A Playwright and AI-powered multi-task toolbox for Xianyu (闲鱼), featuring re
 - **AI-Driven**: Natural language task creation, multimodal model for in-depth product analysis
 - **Multi-Task Concurrency**: Independent configuration for keywords, prices, filters, and AI prompts
 - **SQLite as Primary Storage**: Tasks, results, and price history are persisted in one embedded database instead of repeatedly scanning `jsonl`
-- **Advanced Filtering**: Free shipping, new listing time range, province/city/district filtering
+- **Advanced Filtering**: Free shipping, YHB inspection, AI personal-seller persona, new listing time range, province/city/district filtering
 - **Instant Notifications**: Supports WeCom App, Telegram, and advanced Webhook compatibility
 - **Scheduled Tasks**: Cron expression configuration for periodic tasks
 - **Account & Proxy Rotation**: Multi-account management, task-account binding, proxy pool rotation with failure retry
@@ -83,7 +83,7 @@ docker compose down
 ```
 
 - Default Web UI: `http://127.0.0.1:8000`
-- The default `docker-compose.yaml` builds the local `xianyu-tools:local` image from this source tree, so fork-local changes such as WeCom application messages and task-level notification targets are included.
+- The default `docker-compose.yaml` builds the local `xianyu-tools:local` image from this source tree, so fork-local changes such as WeCom application messages, task-level notification targets, and YHB/free-shipping/personal-seller result filters are included.
 - The Docker image includes Chromium, so no extra browser install is required on the host.
 - Update the local image: `docker compose up --build -d`
 - If you switch to the upstream published image `ghcr.io/usagi-org/ai-goofish:latest`, note that it may not include this repository's fork-only features.
@@ -113,7 +113,8 @@ docker compose down
 
 ### Task Management
 
-- Supports AI creation, keyword rules, price range, new listing filters, region filters, account binding, and cron scheduling.
+- The task form is grouped into collapsible sections for basic info, decision mode, search filters, schedule/account, and notification targets.
+- Supports AI creation, keyword rules, price range, new listing filters, free shipping, YHB inspection, region filters, account binding, and cron scheduling. `yhb_only` stays consistent across task persistence, runtime config, and Xianyu search filtering.
 - AI task creation runs as a background job and shows a dedicated progress dialog after submission.
 - Region filtering can greatly reduce results, so leaving it empty is the safer default.
 
@@ -125,6 +126,7 @@ docker compose down
 ### Results and Logs
 
 - The results page and export endpoints now query SQLite instead of directly scanning `jsonl` files.
+- The results page and CSV export support YHB, free-shipping, and personal-seller-only filters. The personal-seller filter uses the AI-produced `seller_type` persona; keyword-mode results or older records without that persona do not match it.
 - The logs page is the first place to inspect login-state expiry, anti-bot issues, or AI call failures.
 
 ### System Settings

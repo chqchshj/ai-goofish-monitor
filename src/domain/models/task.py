@@ -161,6 +161,7 @@ class Task(BaseModel):
     account_state_file: Optional[str] = None
     account_strategy: Literal["auto", "fixed", "rotate"] = "auto"
     free_shipping: bool = True
+    yhb_only: bool = False
     new_publish_option: Optional[str] = None
     region: Optional[str] = None
     decision_mode: Literal["ai", "keyword"] = "ai"
@@ -217,6 +218,7 @@ class TaskCreate(BaseModel):
     account_state_file: Optional[str] = None
     account_strategy: Literal["auto", "fixed", "rotate"] = "auto"
     free_shipping: bool = True
+    yhb_only: bool = False
     new_publish_option: Optional[str] = None
     region: Optional[str] = None
     decision_mode: Literal["ai", "keyword"] = "ai"
@@ -290,6 +292,7 @@ class TaskUpdate(BaseModel):
     account_state_file: Optional[str] = None
     account_strategy: Optional[Literal["auto", "fixed", "rotate"]] = None
     free_shipping: Optional[bool] = None
+    yhb_only: Optional[bool] = None
     new_publish_option: Optional[str] = None
     region: Optional[str] = None
     decision_mode: Optional[Literal["ai", "keyword"]] = None
@@ -380,6 +383,7 @@ class TaskGenerateRequest(BaseModel):
     account_state_file: Optional[str] = None
     account_strategy: Literal["auto", "fixed", "rotate"] = "auto"
     free_shipping: bool = True
+    yhb_only: bool = False
     new_publish_option: Optional[str] = None
     region: Optional[str] = None
     decision_mode: Literal["ai", "keyword"] = "ai"

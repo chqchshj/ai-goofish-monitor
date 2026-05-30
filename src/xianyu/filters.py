@@ -9,6 +9,7 @@ class SearchFilterOptions:
     new_publish_option: str = ""
     personal_only: bool = False
     free_shipping: bool = False
+    yhb_only: bool = False
     region_filter: str = ""
     min_price: Any = None
     max_price: Any = None
@@ -19,6 +20,7 @@ class SearchFilterOptions:
             new_publish_option=runtime_config.new_publish_option,
             personal_only=runtime_config.personal_only,
             free_shipping=runtime_config.free_shipping,
+            yhb_only=runtime_config.yhb_only,
             region_filter=runtime_config.region_filter,
             min_price=runtime_config.min_price,
             max_price=runtime_config.max_price,
@@ -76,6 +78,19 @@ async def apply_search_filters(
             log_time("包邮筛选请求超时，继续执行。")
         except Exception as e:
             print(f"LOG: 应用包邮筛选失败: {e}")
+
+    if options.yhb_only:
+        try:
+            async with page.expect_response(
+                response_predicate, timeout=20000
+            ) as response_info:
+                await page.click("text=验货宝")
+                await random_sleep(2, 4)
+            final_response = await response_info.value
+        except PlaywrightTimeoutError:
+            log_time("验货宝筛选请求超时，继续执行。")
+        except Exception as e:
+            print(f"LOG: 应用验货宝筛选失败: {e}")
 
     if options.region_filter:
         try:
