@@ -1,8 +1,8 @@
 # PR Draft: Parallel Refactor Batch — P3-1b / P3-2 / P4-2 + P4-1
 
-**Branch:** master (local, 4 commits ahead of origin/master)
+**Branch:** local `master` (not pushed; includes the commits listed below)
 **Prepared:** 2026-05-30
-**Verified by:** R5 validation pass (sonnet46)
+**Verified by:** R5 validation pass (sonnet46), then operator review
 
 ---
 
@@ -80,10 +80,10 @@ Frontend:
 **Commits:** `4d0fdb7`, `0514187`, merge `a705edb`
 
 - `src/services/notification_filter.py` (new, 374 lines):
-  - `score_item()` / `level_for_score()` pure functions
+  - `derive_recommendation_score()` / `derive_recommendation_level()` pure functions
   - `InMemoryDedupStore` (TTL-based, no DB writes)
   - `NotificationPolicy` dataclass
-  - `should_notify()` decision function
+  - `evaluate_notification()` decision function
 - `src/infrastructure/config/settings.py`: 3 new env-only fields:
   - `NOTIFICATION_MIN_SCORE` (default: unset = no threshold)
   - `NOTIFICATION_MIN_LEVEL` (default: unset = no threshold)
@@ -108,8 +108,8 @@ Frontend:
 | Phase | Status | Notes |
 |-------|--------|-------|
 | P4-1  | Landed | Included above (merged after batch started) |
-| P3-3  | Pending | Scraper seam extraction (next Codex lane) |
-| P3-4  | Pending | Structured task-run status/error categories |
+| P3-3  | Running | Result batch operations: select, mark, hide, export |
+| P3-4  | Running | Seller aggregation result view seam |
 
 ---
 
