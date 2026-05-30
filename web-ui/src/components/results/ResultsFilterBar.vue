@@ -25,6 +25,8 @@ interface Props {
   aiRecommendedOnly: boolean
   keywordRecommendedOnly: boolean
   includeHidden: boolean
+  yhbOnly: boolean
+  freeShippingOnly: boolean
   sortBy: 'crawl_time' | 'publish_time' | 'price' | 'keyword_hit_count'
   sortOrder: 'asc' | 'desc'
   isLoading: boolean
@@ -68,6 +70,8 @@ const emit = defineEmits<{
   (e: 'update:aiRecommendedOnly', value: boolean): void
   (e: 'update:keywordRecommendedOnly', value: boolean): void
   (e: 'update:includeHidden', value: boolean): void
+  (e: 'update:yhbOnly', value: boolean): void
+  (e: 'update:freeShippingOnly', value: boolean): void
   (e: 'update:sortBy', value: 'crawl_time' | 'publish_time' | 'price' | 'keyword_hit_count'): void
   (e: 'update:sortOrder', value: 'asc' | 'desc'): void
   (e: 'refresh'): void
@@ -175,6 +179,24 @@ function handleToggleKeywordRecommended(value: boolean) {
             @update:modelValue="(value) => emit('update:includeHidden', value === true)"
           />
           <Label for="include-hidden" class="cursor-pointer">{{ t('results.filters.includeHidden') }}</Label>
+        </div>
+
+        <div class="flex items-center space-x-2">
+          <Checkbox
+            id="yhb-only"
+            :model-value="props.yhbOnly"
+            @update:modelValue="(value) => emit('update:yhbOnly', value === true)"
+          />
+          <Label for="yhb-only" class="cursor-pointer">{{ t('results.filters.yhbOnly') }}</Label>
+        </div>
+
+        <div class="flex items-center space-x-2">
+          <Checkbox
+            id="free-shipping-only"
+            :model-value="props.freeShippingOnly"
+            @update:modelValue="(value) => emit('update:freeShippingOnly', value === true)"
+          />
+          <Label for="free-shipping-only" class="cursor-pointer">{{ t('results.filters.freeShippingOnly') }}</Label>
         </div>
       </div>
 

@@ -88,6 +88,8 @@ async def get_result_file_content(
     ai_recommended_only: bool = Query(False),
     keyword_recommended_only: bool = Query(False),
     include_hidden: bool = Query(False),
+    yhb_only: bool = Query(False),
+    free_shipping_only: bool = Query(False),
     sort_by: str = Query("crawl_time"),
     sort_order: str = Query("desc"),
 ):
@@ -109,6 +111,8 @@ async def get_result_file_content(
             page=page,
             limit=limit,
             include_hidden=include_hidden,
+            yhb_only=yhb_only,
+            free_shipping_only=free_shipping_only,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -144,6 +148,8 @@ async def export_result_file_content(
     ai_recommended_only: bool = Query(False),
     keyword_recommended_only: bool = Query(False),
     include_hidden: bool = Query(False),
+    yhb_only: bool = Query(False),
+    free_shipping_only: bool = Query(False),
     sort_by: str = Query("crawl_time"),
     sort_order: str = Query("desc"),
 ):
@@ -161,6 +167,8 @@ async def export_result_file_content(
             sort_by=sort_by,
             sort_order=sort_order,
             include_hidden=include_hidden,
+            yhb_only=yhb_only,
+            free_shipping_only=free_shipping_only,
         )
         csv_text = build_results_csv(
             enrich_records_with_price_insight(results, filename)

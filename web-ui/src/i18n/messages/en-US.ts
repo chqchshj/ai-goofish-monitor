@@ -150,6 +150,8 @@ const enUS = {
       aiOnly: 'AI recommendations only',
       keywordOnly: 'Keyword recommendations only',
       includeHidden: 'Show hidden items',
+      yhbOnly: 'YHB only',
+      freeShippingOnly: 'Free shipping only',
       manageBlacklist: 'Blacklist Rules',
       exportCsv: 'Export CSV',
       deleteResult: 'Delete Result',

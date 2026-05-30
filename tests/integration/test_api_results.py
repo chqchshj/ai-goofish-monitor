@@ -82,6 +82,98 @@ def test_results_filter_and_sort_for_keyword_recommendations(tmp_path, monkeypat
     assert resp.status_code == 400
 
 
+def test_results_attribute_filters_for_yhb_and_free_shipping_list_and_export(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    jsonl_dir = tmp_path / "jsonl"
+    jsonl_dir.mkdir(parents=True, exist_ok=True)
+    target_file = jsonl_dir / "demo_full_data.jsonl"
+
+    records = [
+        {
+            "爬取时间": "2026-01-01T01:00:00",
+            "商品信息": {
+                "商品ID": "1001",
+                "商品标题": "YHB Free Shipping",
+                "当前售价": "¥1000",
+                "发布时间": "2026-01-01 10:00",
+                "标签": ["验货宝", "包邮"],
+            },
+            "ai_analysis": {"analysis_source": "ai", "is_recommended": True},
+        },
+        {
+            "爬取时间": "2026-01-01T02:00:00",
+            "商品信息": {
+                "商品ID": "1002",
+                "商品标题": "YHB Only",
+                "当前售价": "¥2000",
+                "发布时间": "2026-01-01 11:00",
+                "标签": [{"text": "验货宝"}],
+            },
+            "ai_analysis": {"analysis_source": "keyword", "is_recommended": True, "keyword_hit_count": 2},
+        },
+        {
+            "爬取时间": "2026-01-01T03:00:00",
+            "商品信息": {
+                "商品ID": "1003",
+                "商品标题": "Free Shipping Only",
+                "当前售价": "¥3000",
+                "发布时间": "2026-01-01 12:00",
+                "标签": [{"name": "包邮"}],
+            },
+            "ai_analysis": {"analysis_source": "keyword", "is_recommended": False, "keyword_hit_count": 0},
+        },
+        {
+            "爬取时间": "2026-01-01T04:00:00",
+            "商品信息": {
+                "商品ID": "1004",
+                "商品标题": "标题写着验货宝和包邮但没有平台标签",
+                "当前售价": "¥4000",
+                "发布时间": "2026-01-01 13:00",
+            },
+            "ai_analysis": {"analysis_source": "ai", "is_recommended": False},
+        },
+    ]
+    _write_jsonl(target_file, records)
+
+    app = FastAPI()
+    app.include_router(results.router)
+    client = TestClient(app)
+
+    yhb_resp = client.get("/api/results/demo_full_data.jsonl", params={"yhb_only": True})
+    assert yhb_resp.status_code == 200
+    yhb_payload = yhb_resp.json()
+    assert yhb_payload["total_items"] == 2
+    assert [item["商品信息"]["商品ID"] for item in yhb_payload["items"]] == ["1002", "1001"]
+
+    free_shipping_resp = client.get(
+        "/api/results/demo_full_data.jsonl",
+        params={"free_shipping_only": True, "sort_by": "price", "sort_order": "asc"},
+    )
+    assert free_shipping_resp.status_code == 200
+    free_shipping_payload = free_shipping_resp.json()
+    assert free_shipping_payload["total_items"] == 2
+    assert [item["商品信息"]["商品ID"] for item in free_shipping_payload["items"]] == ["1001", "1003"]
+
+    combined_resp = client.get(
+        "/api/results/demo_full_data.jsonl",
+        params={"yhb_only": True, "free_shipping_only": True, "ai_recommended_only": True},
+    )
+    assert combined_resp.status_code == 200
+    combined_payload = combined_resp.json()
+    assert combined_payload["total_items"] == 1
+    assert combined_payload["items"][0]["商品信息"]["商品ID"] == "1001"
+
+    export_resp = client.get(
+        "/api/results/demo_full_data.jsonl/export",
+        params={"yhb_only": True, "free_shipping_only": True, "sort_by": "price", "sort_order": "asc"},
+    )
+    assert export_resp.status_code == 200
+    assert "YHB Free Shipping" in export_resp.text
+    assert "标题写着验货宝和包邮但没有平台标签" not in export_resp.text
+    assert "YHB Only" not in export_resp.text
+    assert "Free Shipping Only" not in export_resp.text
+
+
 def test_results_insights_and_export_csv(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     jsonl_dir = tmp_path / "jsonl"

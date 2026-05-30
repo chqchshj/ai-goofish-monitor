@@ -150,6 +150,8 @@ const zhCN = {
       aiOnly: '仅看AI推荐',
       keywordOnly: '仅看关键词推荐',
       includeHidden: '显示已屏蔽结果',
+      yhbOnly: '仅看验货宝',
+      freeShippingOnly: '仅看包邮',
       manageBlacklist: '黑名单规则',
       exportCsv: '导出 CSV',
       deleteResult: '删除结果',
