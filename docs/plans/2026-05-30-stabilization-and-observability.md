@@ -19,6 +19,8 @@
 
 ### P0: Non-mutating local smoke and runbook
 
+**Status (2026-05-30): 已完成。** `docs/runbooks/local-smoke.md` 和 `scripts/smoke_check.py` 已落地到 `master`；M9-3 disposable smoke 验证通过（16 targeted tests, web-ui build, smoke_check, openapi check）。
+
 **Objective:** Make current `master` deployment verification repeatable without touching production data.
 
 **Files:**
@@ -129,6 +131,8 @@ cd /root/projects/xianyu-tools
 
 ### P3: Result management usability
 
+**Status (2026-05-30): 已完成。** P3-1b/P3-2/P3-3/P3-4/P3-5 全部落地到 `master`；包含 sort/filter URL 持久化、processed/contacted 标记、批量操作、卖家聚合、seller panel top-N 展开，以及 M9-2 seller click-through filter。
+
 **Objective:** Make accumulated results easier to use day-to-day.
 
 **Likely files:**
@@ -169,7 +173,7 @@ cd web-ui && npm run build
 
 **Objective:** Reduce noise while keeping high-value alerts fast.
 
-**Status (2026-05-30):** P4-1（阈值 + item dedup）与 P4-3（per-seller throttle）已落地到 `master`，由 4 个 env-only 开关控制，默认全部关闭。运维启用顺序、风险与回滚步骤见 `docs/runbooks/notification-throttle-ops.md`。开发侧契约见 `AGENTS.md` § "P4-1 通知降噪契约"。本节余下部分保留为 P4-2 之后的候选方向参考。
+**Status (2026-05-30): 已完成。** P4-1（阈值 + item dedup）、P4-2（通知内容丰富化）、P4-3（per-seller throttle）全部落地到 `master`；4 个 env-only 开关默认全部关闭；运维启用顺序、风险与回滚步骤见 `docs/runbooks/notification-throttle-ops.md`；开发侧契约见 `AGENTS.md` § "P4-1 通知降噪契约"。
 
 **Likely files:**
 - Modify: `src/services/notification_service.py`
