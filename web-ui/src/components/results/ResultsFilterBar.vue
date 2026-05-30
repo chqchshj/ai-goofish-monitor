@@ -11,6 +11,7 @@ import {
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
+import type { ResultSort } from '@/api/results'
 
 interface FileOption {
   value: string
@@ -28,8 +29,7 @@ interface Props {
   yhbOnly: boolean
   freeShippingOnly: boolean
   personalSellerOnly: boolean
-  sortBy: 'crawl_time' | 'publish_time' | 'price' | 'keyword_hit_count'
-  sortOrder: 'asc' | 'desc'
+  sort: ResultSort
   isLoading: boolean
   isReady: boolean
 }
@@ -74,8 +74,7 @@ const emit = defineEmits<{
   (e: 'update:yhbOnly', value: boolean): void
   (e: 'update:freeShippingOnly', value: boolean): void
   (e: 'update:personalSellerOnly', value: boolean): void
-  (e: 'update:sortBy', value: 'crawl_time' | 'publish_time' | 'price' | 'keyword_hit_count'): void
-  (e: 'update:sortOrder', value: 'asc' | 'desc'): void
+  (e: 'update:sort', value: ResultSort): void
   (e: 'refresh'): void
   (e: 'export'): void
   (e: 'delete'): void
@@ -99,7 +98,7 @@ function handleToggleKeywordRecommended(value: boolean) {
 
 <template>
   <div class="app-surface mb-6 p-4 sm:p-5">
-    <div class="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
+    <div class="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
       <div class="space-y-2">
         <Label class="text-xs font-semibold text-slate-500">{{ t('results.title') }}</Label>
         <Select
@@ -122,33 +121,21 @@ function handleToggleKeywordRecommended(value: boolean) {
       <div class="space-y-2">
         <Label class="text-xs font-semibold text-slate-500">{{ t('results.filters.sortByCrawlTime') }}</Label>
         <Select
-          :model-value="props.sortBy"
-          @update:model-value="(value) => emit('update:sortBy', value as any)"
+          :model-value="props.sort"
+          @update:model-value="(value) => emit('update:sort', value as ResultSort)"
         >
           <SelectTrigger class="w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="crawl_time">{{ t('results.filters.sortByCrawlTime') }}</SelectItem>
-            <SelectItem value="publish_time">{{ t('results.filters.sortByPublishTime') }}</SelectItem>
-            <SelectItem value="price">{{ t('results.filters.sortByPrice') }}</SelectItem>
-            <SelectItem value="keyword_hit_count">{{ t('results.filters.sortByKeywordHits') }}</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div class="space-y-2">
-        <Label class="text-xs font-semibold text-slate-500">{{ t('results.filters.asc') }} / {{ t('results.filters.desc') }}</Label>
-        <Select
-          :model-value="props.sortOrder"
-          @update:model-value="(value) => emit('update:sortOrder', value as any)"
-        >
-          <SelectTrigger class="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="desc">{{ t('results.filters.desc') }}</SelectItem>
-            <SelectItem value="asc">{{ t('results.filters.asc') }}</SelectItem>
+            <SelectItem value="discovered_desc">{{ t('results.filters.sortByCrawlTime') }} · {{ t('results.filters.desc') }}</SelectItem>
+            <SelectItem value="discovered_asc">{{ t('results.filters.sortByCrawlTime') }} · {{ t('results.filters.asc') }}</SelectItem>
+            <SelectItem value="publish_desc">{{ t('results.filters.sortByPublishTime') }} · {{ t('results.filters.desc') }}</SelectItem>
+            <SelectItem value="publish_asc">{{ t('results.filters.sortByPublishTime') }} · {{ t('results.filters.asc') }}</SelectItem>
+            <SelectItem value="price_desc">{{ t('results.filters.sortByPrice') }} · {{ t('results.filters.desc') }}</SelectItem>
+            <SelectItem value="price_asc">{{ t('results.filters.sortByPrice') }} · {{ t('results.filters.asc') }}</SelectItem>
+            <SelectItem value="keyword_hit_desc">{{ t('results.filters.sortByKeywordHits') }} · {{ t('results.filters.desc') }}</SelectItem>
+            <SelectItem value="keyword_hit_asc">{{ t('results.filters.sortByKeywordHits') }} · {{ t('results.filters.asc') }}</SelectItem>
           </SelectContent>
         </Select>
       </div>

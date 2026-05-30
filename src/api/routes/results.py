@@ -21,6 +21,7 @@ from src.services.result_storage_service import (
     load_all_result_records,
     load_result_blacklist_keywords,
     load_visible_result_item_ids,
+    normalize_result_sort,
     query_result_records,
     result_file_exists,
     save_result_blacklist_keywords,
@@ -91,6 +92,7 @@ async def get_result_file_content(
     yhb_only: bool = Query(False),
     free_shipping_only: bool = Query(False),
     personal_seller_only: bool = Query(False),
+    sort: str | None = Query(None),
     sort_by: str = Query("crawl_time"),
     sort_order: str = Query("desc"),
 ):
@@ -100,6 +102,7 @@ async def get_result_file_content(
 
     if recommended_only and not ai_recommended_only and not keyword_recommended_only:
         ai_recommended_only = True
+    sort_by, sort_order = normalize_result_sort(sort=sort, sort_by=sort_by, sort_order=sort_order)
 
     try:
         validate_result_filename(filename)
@@ -153,6 +156,7 @@ async def export_result_file_content(
     yhb_only: bool = Query(False),
     free_shipping_only: bool = Query(False),
     personal_seller_only: bool = Query(False),
+    sort: str | None = Query(None),
     sort_by: str = Query("crawl_time"),
     sort_order: str = Query("desc"),
 ):
@@ -160,6 +164,7 @@ async def export_result_file_content(
         raise HTTPException(status_code=400, detail="AI推荐筛选与关键词推荐筛选不能同时开启。")
     if recommended_only and not ai_recommended_only and not keyword_recommended_only:
         ai_recommended_only = True
+    sort_by, sort_order = normalize_result_sort(sort=sort, sort_by=sort_by, sort_order=sort_order)
 
     try:
         validate_result_filename(filename)

@@ -1,6 +1,16 @@
 import type { ResultInsights, ResultItem } from '@/types/result.d.ts'
 import { http } from '@/lib/http'
 
+export type ResultSort =
+  | 'discovered_desc'
+  | 'discovered_asc'
+  | 'publish_desc'
+  | 'publish_asc'
+  | 'price_desc'
+  | 'price_asc'
+  | 'keyword_hit_desc'
+  | 'keyword_hit_asc'
+
 export interface GetResultContentParams {
   recommended_only?: boolean;
   ai_recommended_only?: boolean;
@@ -9,6 +19,7 @@ export interface GetResultContentParams {
   yhb_only?: boolean;
   free_shipping_only?: boolean;
   personal_seller_only?: boolean;
+  sort?: ResultSort;
   sort_by?: 'crawl_time' | 'publish_time' | 'price' | 'keyword_hit_count';
   sort_order?: 'asc' | 'desc';
   page?: number;

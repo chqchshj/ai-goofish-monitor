@@ -1,4 +1,6 @@
+import csv
 import json
+from io import StringIO
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -11,6 +13,10 @@ def _write_jsonl(path, records):
     with open(path, "w", encoding="utf-8") as f:
         for record in records:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+
+def _csv_rows(text: str) -> list[dict[str, str]]:
+    return list(csv.DictReader(StringIO(text)))
 
 
 def test_results_filter_and_sort_for_keyword_recommendations(tmp_path, monkeypatch):
@@ -80,6 +86,79 @@ def test_results_filter_and_sort_for_keyword_recommendations(tmp_path, monkeypat
         params={"ai_recommended_only": True, "keyword_recommended_only": True},
     )
     assert resp.status_code == 400
+
+
+def test_results_combined_sort_param_and_invalid_sort_fallback(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    jsonl_dir = tmp_path / "jsonl"
+    jsonl_dir.mkdir(parents=True, exist_ok=True)
+    target_file = jsonl_dir / "sort_demo_full_data.jsonl"
+
+    records = [
+        {
+            "爬取时间": "2026-01-01T01:00:00",
+            "商品信息": {
+                "商品ID": "1001",
+                "商品标题": "Old Expensive",
+                "当前售价": "¥3000",
+                "发布时间": "2026-01-02 12:00",
+            },
+            "ai_analysis": {"analysis_source": "ai", "is_recommended": False},
+        },
+        {
+            "爬取时间": "2026-01-01T03:00:00",
+            "商品信息": {
+                "商品ID": "1002",
+                "商品标题": "New Middle",
+                "当前售价": "¥2000",
+                "发布时间": "2026-01-01 10:00",
+            },
+            "ai_analysis": {"analysis_source": "ai", "is_recommended": False},
+        },
+        {
+            "爬取时间": "2026-01-01T02:00:00",
+            "商品信息": {
+                "商品ID": "1003",
+                "商品标题": "Middle Cheap",
+                "当前售价": "¥1000",
+                "发布时间": "2026-01-03 10:00",
+            },
+            "ai_analysis": {"analysis_source": "ai", "is_recommended": False},
+        },
+    ]
+    _write_jsonl(target_file, records)
+
+    app = FastAPI()
+    app.include_router(results.router)
+    client = TestClient(app)
+
+    expected_orders = {
+        "discovered_desc": ["1002", "1003", "1001"],
+        "discovered_asc": ["1001", "1003", "1002"],
+        "publish_desc": ["1003", "1001", "1002"],
+        "publish_asc": ["1002", "1001", "1003"],
+        "price_desc": ["1001", "1002", "1003"],
+        "price_asc": ["1003", "1002", "1001"],
+    }
+    for sort, expected_ids in expected_orders.items():
+        resp = client.get("/api/results/sort_demo_full_data.jsonl", params={"sort": sort})
+        assert resp.status_code == 200
+        assert [item["商品信息"]["商品ID"] for item in resp.json()["items"]] == expected_ids
+
+    invalid_resp = client.get("/api/results/sort_demo_full_data.jsonl", params={"sort": "unknown_desc"})
+    assert invalid_resp.status_code == 200
+    assert [item["商品信息"]["商品ID"] for item in invalid_resp.json()["items"]] == ["1002", "1003", "1001"]
+
+    legacy_resp = client.get(
+        "/api/results/sort_demo_full_data.jsonl",
+        params={"sort_by": "price", "sort_order": "asc"},
+    )
+    assert legacy_resp.status_code == 200
+    assert [item["商品信息"]["商品ID"] for item in legacy_resp.json()["items"]] == ["1003", "1002", "1001"]
+
+    export_resp = client.get("/api/results/sort_demo_full_data.jsonl/export", params={"sort": "price_asc"})
+    assert export_resp.status_code == 200
+    assert [row["商品ID"] for row in _csv_rows(export_resp.text)] == ["1003", "1002", "1001"]
 
 
 def test_results_attribute_filters_for_yhb_and_free_shipping_list_and_export(tmp_path, monkeypatch):
