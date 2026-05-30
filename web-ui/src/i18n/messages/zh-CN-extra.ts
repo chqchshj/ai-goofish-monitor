@@ -44,6 +44,13 @@ const zhCNExtra = {
       maxPages: '最多 {count} 页',
     },
     form: {
+      sections: {
+        basic: '基础信息',
+        decision: '判断方式',
+        search: '搜索筛选',
+        scheduleAccount: '定时/账号',
+        notifications: '通知对象',
+      },
       taskName: '任务名称',
       taskNamePlaceholder: '例如：索尼 A7M4 相机',
       keyword: '搜索关键词',

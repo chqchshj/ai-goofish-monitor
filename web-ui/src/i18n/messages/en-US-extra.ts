@@ -44,6 +44,13 @@ const enUSExtra = {
       maxPages: 'Up to {count} pages',
     },
     form: {
+      sections: {
+        basic: 'Basic Info',
+        decision: 'Decision Mode',
+        search: 'Search Filters',
+        scheduleAccount: 'Schedule / Account',
+        notifications: 'Notification Targets',
+      },
       taskName: 'Task Name',
       taskNamePlaceholder: 'Example: Sony A7M4 Camera',
       keyword: 'Search Keyword',
