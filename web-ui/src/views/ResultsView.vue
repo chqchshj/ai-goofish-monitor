@@ -5,6 +5,7 @@ import { useResults } from '@/composables/useResults'
 import ResultsFilterBar from '@/components/results/ResultsFilterBar.vue'
 import ResultsGrid from '@/components/results/ResultsGrid.vue'
 import ResultsInsightsPanel from '@/components/results/ResultsInsightsPanel.vue'
+import SellersPanel from '@/components/results/SellersPanel.vue'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/toast'
@@ -28,6 +29,7 @@ const {
   isAllCurrentPageSelected,
   isSomeCurrentPageSelected,
   insights,
+  sellerAggregation,
   filters,
   isLoading,
   error,
@@ -194,6 +196,8 @@ async function handleSaveBlacklistRules() {
     />
 
     <ResultsInsightsPanel :insights="insights" :selected-task-label="selectedTaskLabel" />
+
+    <SellersPanel :aggregation="sellerAggregation" />
 
     <div
       v-if="results.length > 0"

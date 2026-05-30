@@ -46,6 +46,22 @@ export interface GetResultContentParams {
   limit?: number;
 }
 
+export interface SellerSummary {
+  seller_nickname: string;
+  item_count: number;
+  min_price: number | null;
+  max_price: number | null;
+  latest_crawl_time: string;
+  recommended_count: number;
+  personal_seller_summary: string | null;
+}
+
+export interface GetSellerAggregationResponse {
+  total_sellers: number;
+  total_items: number;
+  sellers: SellerSummary[];
+}
+
 export async function getResultFiles(): Promise<string[]> {
   const data = await http('/api/results/files')
   return data.files || []
@@ -129,4 +145,11 @@ export async function updateItemsBatch(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
+}
+
+export async function getSellerAggregation(
+  filename: string,
+  params: GetResultContentParams = {}
+): Promise<GetSellerAggregationResponse> {
+  return await http(`/api/results/${filename}/sellers`, { params: params as Record<string, any> })
 }

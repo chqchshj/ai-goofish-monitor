@@ -3,6 +3,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import type { ResultInsights, ResultItem } from '@/types/result.d.ts'
 import * as resultsApi from '@/api/results'
+import type { GetSellerAggregationResponse } from '@/api/results'
 import { useWebSocket } from '@/composables/useWebSocket'
 import * as tasksApi from '@/api/tasks'
 import {
@@ -23,6 +24,7 @@ export function useResults() {
   const results = ref<ResultItem[]>([])
   const selectedItemIds = ref<Set<string>>(new Set())
   const insights = ref<ResultInsights | null>(null)
+  const sellerAggregation = ref<GetSellerAggregationResponse | null>(null)
   const totalItems = ref(0)
   const page = ref(1)
   const limit = ref(100)
@@ -175,6 +177,20 @@ export function useResults() {
     }
   }
 
+  async function fetchSellerAggregation() {
+    if (!selectedFile.value) {
+      sellerAggregation.value = null
+      return
+    }
+
+    try {
+      sellerAggregation.value = await resultsApi.getSellerAggregation(selectedFile.value, { ...filters })
+    } catch (e) {
+      if (e instanceof Error) error.value = e
+      sellerAggregation.value = null
+    }
+  }
+
   async function fetchBlacklistRules() {
     if (!selectedFile.value) {
       blacklistKeywords.value = []
@@ -226,6 +242,7 @@ export function useResults() {
     if (selectedFile.value && selectedFile.value === oldFile) {
       fetchResults()
       fetchInsights()
+      fetchSellerAggregation()
     }
   })
 
@@ -239,6 +256,7 @@ export function useResults() {
     if (selectedFile.value && selectedFile.value === current) {
       await fetchResults()
       await fetchInsights()
+      await fetchSellerAggregation()
       await fetchBlacklistRules()
     }
   }
@@ -309,6 +327,7 @@ export function useResults() {
       clearSelection()
       await fetchResults()
       await fetchInsights()
+      await fetchSellerAggregation()
       return data
     } catch (e) {
       if (e instanceof Error) error.value = e
@@ -327,6 +346,7 @@ export function useResults() {
       blacklistKeywords.value = data.keywords || []
       await fetchResults()
       await fetchInsights()
+      await fetchSellerAggregation()
     } catch (e) {
       if (e instanceof Error) error.value = e
       throw e
@@ -352,6 +372,7 @@ export function useResults() {
   }, { deep: true })
   watch(selectedFile, () => {
     fetchInsights()
+    fetchSellerAggregation()
     fetchBlacklistRules()
   })
   watch(selectedFile, (value) => {
@@ -427,12 +448,14 @@ export function useResults() {
     isAllCurrentPageSelected,
     isSomeCurrentPageSelected,
     insights,
+    sellerAggregation,
     totalItems,
     filters,
     isLoading,
     error,
     fetchFiles, // Expose to allow manual refresh
     refreshResults,
+    fetchSellerAggregation,
     exportSelectedResults,
     clearSelection,
     toggleItemSelection,
