@@ -15,12 +15,14 @@ import { formatDateTime } from '@/i18n'
 
 interface Props {
   item: ResultItem
+  selected?: boolean
 }
 
 const props = defineProps<Props>()
 const emit = defineEmits<{
   (e: 'toggle-block', item: ResultItem): void
   (e: 'toggle-flag', item: ResultItem, flag: 'is_processed' | 'is_contacted'): void
+  (e: 'toggle-selection', item: ResultItem, selected: boolean): void
 }>()
 const { t } = useI18n()
 
@@ -52,11 +54,15 @@ const hiddenLabel = computed(() => {
   return t('results.card.hidden')
 })
 
+function handleSelectionChange(event: Event) {
+  emit('toggle-selection', props.item, (event.target as HTMLInputElement).checked)
+}
+
 const expanded = ref(false)
 </script>
 
 <template>
-  <Card class="group flex flex-col h-full border-none shadow-glass hover:shadow-card-hover transition-all duration-300 rounded-2xl overflow-hidden bg-white/80 backdrop-blur-sm" :class="{ 'opacity-50': isHidden }">
+  <Card class="group flex flex-col h-full border-none shadow-glass hover:shadow-card-hover transition-all duration-300 rounded-2xl overflow-hidden bg-white/80 backdrop-blur-sm" :class="{ 'opacity-50': isHidden, 'ring-2 ring-primary/70': props.selected }">
     <!-- Image Header -->
     <div class="relative aspect-[4/3] overflow-hidden">
       <div class="absolute inset-0 bg-slate-200 animate-pulse" v-if="!imageUrl"></div>
@@ -71,8 +77,17 @@ const expanded = ref(false)
       <div v-if="isHidden" class="absolute inset-0 bg-black/30 flex items-center justify-center">
         <span class="text-white/80 text-xs font-semibold uppercase tracking-wider">{{ hiddenLabel }}</span>
       </div>
-      <!-- Overlays -->
-      <div class="absolute top-3 left-3 flex gap-2">
+      <!-- Selection + Overlays -->
+      <label class="absolute top-3 left-3 z-10 flex h-8 w-8 items-center justify-center rounded-full border border-white/60 bg-white/75 shadow-sm backdrop-blur-md">
+        <span class="sr-only">{{ t('results.batch.selectItem') }}</span>
+        <input
+          type="checkbox"
+          class="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+          :checked="props.selected === true"
+          @change="handleSelectionChange"
+        />
+      </label>
+      <div class="absolute top-3 left-14 flex gap-2">
         <Badge v-if="isRecommended && !isHidden" variant="default" class="bg-emerald-500/90 backdrop-blur-md border-none shadow-sm">
           {{ t('results.card.curated') }}
         </Badge>

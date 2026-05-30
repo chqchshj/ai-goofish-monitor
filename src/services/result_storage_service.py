@@ -653,6 +653,29 @@ async def update_item_user_flags(
     )
 
 
+def _build_item_update_sets(
+    *,
+    status: str | None = None,
+    is_processed: bool | None = None,
+    is_contacted: bool | None = None,
+) -> tuple[list[str], list]:
+    sets: list[str] = []
+    params: list = []
+    if status is not None:
+        valid = {"active", "hidden", "expired"}
+        if status not in valid:
+            raise ValueError(f"status must be one of {valid}")
+        sets.append("status = ?")
+        params.append(status)
+    if is_processed is not None:
+        sets.append("is_processed = ?")
+        params.append(1 if is_processed else 0)
+    if is_contacted is not None:
+        sets.append("is_contacted = ?")
+        params.append(1 if is_contacted else 0)
+    return sets, params
+
+
 def _update_item_user_flags_sync(
     filename: str,
     item_id: str,
@@ -660,14 +683,10 @@ def _update_item_user_flags_sync(
     is_contacted: bool | None,
 ) -> bool:
     bootstrap_sqlite_storage()
-    sets: list[str] = []
-    params: list = []
-    if is_processed is not None:
-        sets.append("is_processed = ?")
-        params.append(1 if is_processed else 0)
-    if is_contacted is not None:
-        sets.append("is_contacted = ?")
-        params.append(1 if is_contacted else 0)
+    sets, params = _build_item_update_sets(
+        is_processed=is_processed,
+        is_contacted=is_contacted,
+    )
     if not sets:
         return False
     params.extend([filename, item_id])
@@ -678,6 +697,59 @@ def _update_item_user_flags_sync(
         )
         conn.commit()
         return cursor.rowcount > 0
+
+
+async def update_items_batch(
+    filename: str,
+    item_ids: list[str],
+    *,
+    status: str | None = None,
+    is_processed: bool | None = None,
+    is_contacted: bool | None = None,
+) -> int:
+    """Update status and/or user flags for multiple result items.
+
+    Returns the number of rows updated. Missing item IDs are ignored so the caller
+    can report partial success without mutating unrelated files.
+    """
+    return await asyncio.to_thread(
+        _update_items_batch_sync,
+        filename,
+        item_ids,
+        status,
+        is_processed,
+        is_contacted,
+    )
+
+
+def _update_items_batch_sync(
+    filename: str,
+    item_ids: list[str],
+    status: str | None,
+    is_processed: bool | None,
+    is_contacted: bool | None,
+) -> int:
+    bootstrap_sqlite_storage()
+    unique_item_ids = [str(item_id).strip() for item_id in dict.fromkeys(item_ids) if str(item_id).strip()]
+    if not unique_item_ids:
+        return 0
+    sets, params = _build_item_update_sets(
+        status=status,
+        is_processed=is_processed,
+        is_contacted=is_contacted,
+    )
+    if not sets:
+        return 0
+    with sqlite_connection() as conn:
+        total = 0
+        for item_id in unique_item_ids:
+            cursor = conn.execute(
+                f"UPDATE result_items SET {', '.join(sets)} WHERE result_filename = ? AND item_id = ?",
+                tuple([*params, filename, item_id]),
+            )
+            total += cursor.rowcount
+        conn.commit()
+        return total
 
 
 async def load_result_blacklist_keywords(filename: str) -> list[str]:

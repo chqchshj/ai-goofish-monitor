@@ -27,6 +27,7 @@ from src.services.result_storage_service import (
     save_result_blacklist_keywords,
     update_item_status,
     update_item_user_flags,
+    update_items_batch,
 )
 
 
@@ -226,6 +227,13 @@ class UpdateUserFlagsRequest(BaseModel):
     is_contacted: bool | None = None
 
 
+class BatchUpdateItemsRequest(BaseModel):
+    item_ids: list[str]
+    status: ItemStatus | None = None
+    is_processed: bool | None = None
+    is_contacted: bool | None = None
+
+
 @router.patch("/{filename}/items/{item_id}/status")
 async def patch_item_status(filename: str, item_id: str, body: UpdateStatusRequest):
     """更新指定商品的状态（active/hidden/expired）"""
@@ -255,6 +263,37 @@ async def patch_item_user_flags(filename: str, item_id: str, body: UpdateUserFla
         raise HTTPException(status_code=400, detail=str(exc))
     return {
         "message": "标记已更新",
+        "is_processed": body.is_processed,
+        "is_contacted": body.is_contacted,
+    }
+
+
+@router.patch("/{filename}/items/batch")
+async def patch_items_batch(filename: str, body: BatchUpdateItemsRequest):
+    """批量更新商品状态和/或用户标记。"""
+    item_ids = [str(item_id).strip() for item_id in body.item_ids if str(item_id).strip()]
+    if not item_ids:
+        raise HTTPException(status_code=400, detail="至少需要提供一个商品 ID")
+    if body.status is None and body.is_processed is None and body.is_contacted is None:
+        raise HTTPException(status_code=400, detail="至少需要提供一个状态或标记字段")
+    try:
+        validate_result_filename(filename)
+        updated_count = await update_items_batch(
+            filename,
+            item_ids,
+            status=body.status.value if body.status else None,
+            is_processed=body.is_processed,
+            is_contacted=body.is_contacted,
+        )
+        if updated_count <= 0:
+            raise HTTPException(status_code=404, detail="未找到可更新的商品")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {
+        "message": "批量操作已完成",
+        "requested_count": len(dict.fromkeys(item_ids)),
+        "updated_count": updated_count,
+        "status": body.status.value if body.status else None,
         "is_processed": body.is_processed,
         "is_contacted": body.is_contacted,
     }

@@ -11,6 +11,23 @@ export type ResultSort =
   | 'keyword_hit_desc'
   | 'keyword_hit_asc'
 
+
+export interface BatchUpdateItemsPayload {
+  item_ids: string[];
+  status?: 'active' | 'hidden' | 'expired';
+  is_processed?: boolean;
+  is_contacted?: boolean;
+}
+
+export interface BatchUpdateItemsResponse {
+  message: string;
+  requested_count: number;
+  updated_count: number;
+  status?: string | null;
+  is_processed?: boolean | null;
+  is_contacted?: boolean | null;
+}
+
 export interface GetResultContentParams {
   recommended_only?: boolean;
   ai_recommended_only?: boolean;
@@ -99,5 +116,17 @@ export async function updateItemFlags(
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(flags),
+  })
+}
+
+
+export async function updateItemsBatch(
+  filename: string,
+  payload: BatchUpdateItemsPayload
+): Promise<BatchUpdateItemsResponse> {
+  return await http(`/api/results/${filename}/items/batch`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
   })
 }
