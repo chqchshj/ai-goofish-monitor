@@ -182,6 +182,9 @@ const enUS = {
       totalItems: '{count} items total',
       itemCount: '{count} items',
       recommended: '{count} rec',
+      showAll: 'Show all',
+      showLess: 'Show less',
+      moreHidden: '{count} more sellers hidden',
     },
     grid: {
       loading: 'Loading results...',
