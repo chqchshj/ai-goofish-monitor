@@ -136,6 +136,7 @@ export function buildInitialTaskFormState(options: BuildInitialTaskFormStateOpti
         AUTO_ACCOUNT_VALUE,
       analyze_images: defaultValues.analyze_images ?? options.initialData.analyze_images ?? true,
       free_shipping: defaultValues.free_shipping ?? options.initialData.free_shipping ?? true,
+      yhb_only: defaultValues.yhb_only ?? options.initialData.yhb_only ?? false,
       new_publish_option:
         defaultValues.new_publish_option || options.initialData.new_publish_option || NONE_NEW_PUBLISH_OPTION,
       region: defaultValues.region || options.initialData.region || '',
@@ -160,6 +161,7 @@ export function buildInitialTaskFormState(options: BuildInitialTaskFormStateOpti
       account_strategy: defaultAccount ? 'fixed' : 'auto',
       account_state_file: defaultAccount || AUTO_ACCOUNT_VALUE,
       free_shipping: true,
+      yhb_only: false,
       new_publish_option: NONE_NEW_PUBLISH_OPTION,
       region: '',
       decision_mode: 'ai',
@@ -216,6 +218,7 @@ export function buildTaskSubmitPayload(options: BuildTaskSubmitPayloadOptions): 
   submitData.decision_mode = decisionMode
   submitData.account_strategy = currentAccountStrategy
   submitData.analyze_images = submitData.analyze_images !== false
+  submitData.yhb_only = submitData.yhb_only === true
   submitData.keyword_rules = decisionMode === 'keyword' ? parseKeywordText(options.keywordRulesInput) : []
   submitData.notification_targets = normalizeNotificationTargets(submitData.notification_targets)
   if (decisionMode === 'keyword' && !submitData.description) {

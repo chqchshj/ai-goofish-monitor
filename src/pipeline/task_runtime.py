@@ -21,6 +21,7 @@ class TaskRuntimeConfig:
     keyword_rules: list = field(default_factory=list)
     notification_targets: list = field(default_factory=list)
     free_shipping: bool = False
+    yhb_only: bool = False
     new_publish_option: str = ""
     region_filter: str = ""
     ai_prompt_text: str = ""
@@ -45,7 +46,8 @@ class TaskRuntimeConfig:
             decision_mode=decision_mode,
             keyword_rules=task_config.get("keyword_rules") or [],
             notification_targets=task_config.get("notification_targets") or [],
-            free_shipping=task_config.get("free_shipping", False),
+            free_shipping=bool(task_config.get("free_shipping", False)),
+            yhb_only=bool(task_config.get("yhb_only", False)),
             new_publish_option=new_publish_option,
             region_filter=(task_config.get("region") or "").strip(),
             ai_prompt_text=task_config.get("ai_prompt_text", ""),

@@ -36,6 +36,7 @@ def build_task_create(req: TaskGenerateRequest, criteria_file: str) -> TaskCreat
         account_state_file=req.account_state_file,
         account_strategy=req.account_strategy,
         free_shipping=req.free_shipping,
+        yhb_only=req.yhb_only,
         new_publish_option=req.new_publish_option,
         region=req.region,
         decision_mode=req.decision_mode or "ai",

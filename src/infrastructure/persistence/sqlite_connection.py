@@ -39,6 +39,7 @@ SCHEMA_STATEMENTS = (
         account_state_file TEXT,
         account_strategy TEXT NOT NULL,
         free_shipping INTEGER NOT NULL,
+        yhb_only INTEGER NOT NULL DEFAULT 0,
         new_publish_option TEXT,
         region TEXT,
         decision_mode TEXT NOT NULL,
@@ -144,6 +145,7 @@ def init_schema(conn: sqlite3.Connection) -> None:
     for statement in SCHEMA_STATEMENTS:
         conn.execute(statement)
     _migrate_tasks_notification_targets(conn)
+    _migrate_tasks_yhb_only(conn)
     _migrate_result_items_status(conn)
     conn.commit()
 
@@ -155,6 +157,13 @@ def _migrate_tasks_notification_targets(conn: sqlite3.Connection) -> None:
         conn.execute(
             "ALTER TABLE tasks ADD COLUMN notification_targets_json TEXT NOT NULL DEFAULT '[]'"
         )
+
+
+def _migrate_tasks_yhb_only(conn: sqlite3.Connection) -> None:
+    """为 tasks 表添加只看验货宝筛选列（兼容旧库）。"""
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(tasks)").fetchall()]
+    if "yhb_only" not in cols:
+        conn.execute("ALTER TABLE tasks ADD COLUMN yhb_only INTEGER NOT NULL DEFAULT 0")
 
 
 def _migrate_result_items_status(conn: sqlite3.Connection) -> None:
