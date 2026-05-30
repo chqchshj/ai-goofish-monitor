@@ -31,7 +31,6 @@ const targets = computed(() => Array.isArray(props.modelValue) ? props.modelValu
 const notificationChannelOptions = computed(() => [
   { value: 'telegram', label: t('tasks.form.notifications.channels.telegram') },
   { value: 'wecom_app', label: t('tasks.form.notifications.channels.wecomApp') },
-  { value: 'wecom', label: t('tasks.form.notifications.channels.wecom') },
   { value: 'default', label: t('tasks.form.notifications.channels.default') },
 ])
 
@@ -56,7 +55,7 @@ function updateNotificationTargetChannel(index: string | number, value: unknown)
   const numericIndex = Number(index)
   if (!Number.isFinite(numericIndex)) return
   const channel = String(value || '').trim() as NotificationChannel
-  if (!['telegram', 'wecom_app', 'wecom', 'default'].includes(channel)) return
+  if (!['telegram', 'wecom_app', 'default'].includes(channel)) return
 
   const nextTargets = [...targets.value]
   const current = nextTargets[numericIndex]
@@ -73,7 +72,6 @@ function updateNotificationTargetChannel(index: string | number, value: unknown)
 function notificationRecipientPlaceholder(channel: NotificationChannel) {
   if (channel === 'telegram') return t('tasks.form.notifications.placeholders.telegram')
   if (channel === 'wecom_app') return t('tasks.form.notifications.placeholders.wecom_app', { at: '@' })
-  if (channel === 'wecom') return t('tasks.form.notifications.placeholders.wecom')
   return t('tasks.form.notifications.placeholders.default')
 }
 

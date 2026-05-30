@@ -9,7 +9,6 @@ from src.infrastructure.external.notification_clients.webhook_client import Webh
 from src.services.notification_config_service import (
     build_configured_channels,
     build_notification_settings_response,
-    get_deprecated_notification_channels,
 )
 from src.services.notification_service import NotificationService
 
@@ -133,13 +132,8 @@ def test_target_factory_empty_targets_uses_global_default():
     assert telegram.chat_id == "global-chat"
 
 
-def test_deprecated_channels_are_reported_without_hiding_configured_channels():
+def test_retired_channels_are_not_reported_as_configured_channels():
     settings = NotificationSettings(
-        ntfy_topic_url="https://ntfy.sh/topic",
-        bark_url="https://api.day.app/token",
-        gotify_url="https://gotify.example.com",
-        gotify_token="token",
-        wx_bot_url="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=legacy",
         wecom_app_corpid="corp",
         wecom_app_secret="secret",
         wecom_app_agentid="1000001",
@@ -149,25 +143,14 @@ def test_deprecated_channels_are_reported_without_hiding_configured_channels():
     )
 
     assert build_configured_channels(settings) == [
-        "ntfy",
-        "bark",
-        "gotify",
-        "wecom",
         "wecom_app",
         "telegram",
         "webhook",
-    ]
-    assert get_deprecated_notification_channels(settings) == [
-        "ntfy",
-        "bark",
-        "gotify",
-        "wecom",
     ]
 
 
 def test_notification_settings_response_surfaces_channel_metadata():
     settings = NotificationSettings(
-        ntfy_topic_url="https://ntfy.sh/topic",
         wecom_app_corpid="corp",
         wecom_app_secret="secret",
         wecom_app_agentid="1000001",
@@ -177,7 +160,7 @@ def test_notification_settings_response_surfaces_channel_metadata():
 
     response = build_notification_settings_response(settings)
 
-    assert response["CONFIGURED_CHANNELS"] == ["ntfy", "wecom_app", "telegram"]
+    assert response["CONFIGURED_CHANNELS"] == ["wecom_app", "telegram"]
     assert response["PREFERRED_CHANNELS"] == ["wecom_app"]
-    assert response["DEPRECATED_CHANNELS"] == ["ntfy"]
-    assert response["ADVANCED_COMPAT_CHANNELS"] == ["telegram", "webhook"]
+    assert "DEPRECATED_CHANNELS" not in response
+    assert response["ADVANCED_COMPAT_CHANNELS"] == ["webhook"]

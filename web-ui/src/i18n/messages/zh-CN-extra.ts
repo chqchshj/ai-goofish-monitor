@@ -104,14 +104,12 @@ const zhCNExtra = {
         channels: {
           telegram: 'Telegram',
           wecomApp: '企业微信应用',
-          wecom: '企业微信群机器人',
           default: '全局默认',
         },
         placeholders: {
           telegram: 'Telegram chat_id',
           wecomApp: '{at}all 或成员 UserID，多个用 | 分隔',
           wecom_app: '{at}all 或成员 UserID，多个用 | 分隔',
-          wecom: '企业微信群机器人 webhook URL',
           default: '使用全局默认通知配置',
         },
         wecomAppPicker: {
@@ -247,13 +245,9 @@ const zhCNExtra = {
     configurationNotes: '配置说明',
     configurationNotesDescription: 'Webhook 的 Query / Body 支持 JSON 模板，测试按钮会直接调用后端真实发送逻辑，能提前发现 token、URL、JSON 格式问题。',
     loading: '正在加载通知配置...',
-    legacyWarningTitle: '检测到已配置的旧通知渠道',
-    legacyWarningDescription: '{channels} 仍会按现有配置发送通知，但后续建议优先使用企业微信应用；任务级通知路由仍保留 wecom_app、telegram、wecom 和默认渠道。',
     preferredSectionTitle: '首选通知渠道',
     preferredSectionDescription: '新配置优先使用企业微信应用，任务级接收人选择也基于该渠道保留。',
     preferredBadge: '推荐',
-    legacySectionTitle: '旧渠道兼容',
-    legacySectionDescription: '这些渠道仍可编辑、测试和清空，但不再作为新配置的首选入口。',
     advancedSectionTitle: '高级兼容渠道',
     advancedSectionDescription: '{channels} 适合已有集成或特殊网络环境，仍可独立编辑、测试和清空。',
     clear: '清空',
@@ -265,22 +259,7 @@ const zhCNExtra = {
     secretPlaceholder: '已配置则留空保留，输入新值覆盖',
     secretKeepPlaceholder: '已配置则留空保留',
     notConfigured: '尚未配置。',
-    ntfy: {
-      description: '适合轻量推送，URL 非敏感，可直接回显和修改。',
-    },
-    bark: {
-      description: 'URL 含设备 key，已改为不回显模式。',
-      configuredHint: '已配置敏感值，当前页面不回显。',
-    },
-    gotify: {
-      description: 'URL 与 Token 必须成对配置。',
-    },
-    wecom: {
-      title: '企业微信机器人',
-      description: 'Bot URL 含 key，不回显，仅支持更新或清空。',
-      urlLabel: '企业微信 Bot URL',
-      configuredHint: '已保存机器人地址。',
-    },
+
     wecomApp: {
       title: '企业微信应用',
       description: '使用企业微信自建应用推送，Corp Secret 不回显，Corp ID、Agent ID 和默认接收人可直接修改。',

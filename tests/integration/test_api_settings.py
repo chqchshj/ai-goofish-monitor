@@ -143,24 +143,20 @@ def test_notification_settings_redact_sensitive_values_and_expose_flags(tmp_path
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["NTFY_TOPIC_URL"] == "https://ntfy.sh/demo-topic"
-    assert payload["GOTIFY_URL"] == "https://gotify.example.com"
+    assert "NTFY_TOPIC_URL" not in payload
+    assert "GOTIFY_URL" not in payload
+    assert "BARK_URL" not in payload
+    assert "WX_BOT_URL" not in payload
     assert payload["TELEGRAM_CHAT_ID"] == "123456"
     assert payload["TELEGRAM_API_BASE_URL"] == "https://tg.example.com/proxy"
     assert payload["WECOM_APP_CORPID"] == "corp-id"
     assert payload["WECOM_APP_AGENTID"] == "1000001"
     assert payload["WECOM_APP_TOUSER"] == "user1|user2"
-    assert payload["BARK_URL"] == ""
-    assert payload["WX_BOT_URL"] == ""
     assert payload["WECOM_APP_SECRET"] == ""
-    assert payload["GOTIFY_TOKEN"] == ""
     assert payload["TELEGRAM_BOT_TOKEN"] == ""
     assert payload["WEBHOOK_URL"] == ""
     assert payload["WEBHOOK_HEADERS"] == ""
-    assert payload["BARK_URL_SET"] is True
-    assert payload["WX_BOT_URL_SET"] is True
     assert payload["WECOM_APP_SECRET_SET"] is True
-    assert payload["GOTIFY_TOKEN_SET"] is True
     assert payload["TELEGRAM_BOT_TOKEN_SET"] is True
     assert payload["WEBHOOK_URL_SET"] is True
     assert payload["WEBHOOK_HEADERS_SET"] is True
@@ -173,13 +169,6 @@ def test_update_notification_settings_rejects_invalid_channel_config(tmp_path, m
     env_file.write_text("", encoding="utf-8")
     monkeypatch.setattr(env_manager, "env_file", env_file)
     client = _build_settings_client()
-
-    gotify_response = client.put(
-        "/api/settings/notifications",
-        json={"GOTIFY_URL": "https://gotify.example.com"},
-    )
-    assert gotify_response.status_code == 422
-    assert "GOTIFY_TOKEN" in gotify_response.text
 
     telegram_proxy_response = client.put(
         "/api/settings/notifications",
@@ -359,11 +348,11 @@ def test_system_status_includes_notification_channel_flags(tmp_path, monkeypatch
 
     assert response.status_code == 200
     env_payload = response.json()["env_file"]
-    assert env_payload["ntfy_topic_url_set"] is True
-    assert env_payload["gotify_url_set"] is True
-    assert env_payload["gotify_token_set"] is True
-    assert env_payload["bark_url_set"] is True
-    assert env_payload["wx_bot_url_set"] is True
+    assert "ntfy_topic_url_set" not in env_payload
+    assert "gotify_url_set" not in env_payload
+    assert "gotify_token_set" not in env_payload
+    assert "bark_url_set" not in env_payload
+    assert "wx_bot_url_set" not in env_payload
     assert env_payload["wecom_app_corpid_set"] is True
     assert env_payload["wecom_app_secret_set"] is True
     assert env_payload["wecom_app_agentid_set"] is True
@@ -424,7 +413,7 @@ def test_notification_test_endpoint_merges_stored_secret_values(tmp_path, monkey
     assert captured["json"]["chat_id"] == "20002"
 
 
-def test_notification_test_endpoint_ignores_other_channel_dirty_fields(tmp_path, monkeypatch):
+def test_notification_test_endpoint_rejects_retired_channels(tmp_path, monkeypatch):
     _clear_settings_env(monkeypatch)
     env_file = tmp_path / ".env"
     env_file.write_text(
@@ -433,24 +422,6 @@ def test_notification_test_endpoint_ignores_other_channel_dirty_fields(tmp_path,
     )
     monkeypatch.setattr(env_manager, "env_file", env_file)
     client = _build_settings_client()
-
-    captured = []
-
-    class _FakeResponse:
-        status_code = 200
-
-        def raise_for_status(self):
-            return None
-
-    def _fake_post(url, data=None, headers=None, timeout=None, **kwargs):
-        captured.append({
-            "url": url,
-            "data": data,
-            "headers": headers,
-        })
-        return _FakeResponse()
-
-    monkeypatch.setattr("requests.post", _fake_post)
 
     response = client.post(
         "/api/settings/notifications/test",
@@ -463,12 +434,8 @@ def test_notification_test_endpoint_ignores_other_channel_dirty_fields(tmp_path,
         },
     )
 
-    assert response.status_code == 200
-    payload = response.json()
-    assert list(payload["results"]) == ["ntfy"]
-    assert payload["results"]["ntfy"]["success"] is True
-    assert len(captured) == 1
-    assert captured[0]["url"] == "https://ntfy.sh/demo-topic"
+    assert response.status_code == 422
+    assert "不支持的通知渠道: ntfy" in response.text
 
 
 def test_ai_settings_fall_back_to_runtime_environment_when_env_file_missing(tmp_path, monkeypatch):
@@ -519,17 +486,17 @@ def test_notification_settings_fall_back_to_runtime_environment_when_env_file_mi
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["NTFY_TOPIC_URL"] == "https://ntfy.sh/runtime-topic"
+    assert "NTFY_TOPIC_URL" not in payload
     assert payload["TELEGRAM_CHAT_ID"] == "20001"
     assert payload["TELEGRAM_API_BASE_URL"] == "https://runtime-tg-proxy.example.com"
-    assert payload["BARK_URL"] == ""
-    assert payload["BARK_URL_SET"] is True
+    assert "BARK_URL" not in payload
+    assert "BARK_URL_SET" not in payload
     assert payload["WECOM_APP_CORPID"] == "runtime-corp"
     assert payload["WECOM_APP_AGENTID"] == "1000002"
     assert payload["WECOM_APP_SECRET"] == ""
     assert payload["WECOM_APP_SECRET_SET"] is True
     assert payload["TELEGRAM_BOT_TOKEN_SET"] is True
-    assert sorted(payload["CONFIGURED_CHANNELS"]) == ["bark", "ntfy", "telegram", "wecom_app"]
+    assert sorted(payload["CONFIGURED_CHANNELS"]) == ["telegram", "wecom_app"]
 
 
 def test_ai_test_endpoint_falls_back_to_responses_when_chat_completions_api_404(

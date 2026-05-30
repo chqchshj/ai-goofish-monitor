@@ -104,14 +104,12 @@ const enUSExtra = {
         channels: {
           telegram: 'Telegram',
           wecomApp: 'WeCom App',
-          wecom: 'WeCom Group Bot',
           default: 'Global Default',
         },
         placeholders: {
           telegram: 'Telegram chat_id',
           wecomApp: '{at}all or member UserID; separate multiple users with |',
           wecom_app: '{at}all or member UserID; separate multiple users with |',
-          wecom: 'WeCom group bot webhook URL',
           default: 'Use global notification settings',
         },
         wecomAppPicker: {
@@ -247,13 +245,9 @@ const enUSExtra = {
     configurationNotes: 'Configuration Notes',
     configurationNotesDescription: 'Webhook Query and Body support JSON templates. The test button calls the real backend delivery flow so token, URL, and JSON issues show up early.',
     loading: 'Loading notification settings...',
-    legacyWarningTitle: 'Legacy notification channels are configured',
-    legacyWarningDescription: '{channels} will continue to send with the current configuration, but new routing should prefer WeCom App. Task-level targets still support wecom_app, telegram, wecom, and default.',
     preferredSectionTitle: 'Preferred Channel',
     preferredSectionDescription: 'Use WeCom App for new notification setup. Task-level recipient selection remains tied to this channel.',
     preferredBadge: 'Recommended',
-    legacySectionTitle: 'Legacy Compatibility',
-    legacySectionDescription: 'These channels remain editable, testable, and clearable, but are no longer the primary setup path.',
     advancedSectionTitle: 'Advanced Compatibility',
     advancedSectionDescription: '{channels} remain available for existing integrations and special network environments.',
     clear: 'Clear',
@@ -265,22 +259,7 @@ const enUSExtra = {
     secretPlaceholder: 'Leave blank to keep the current value, or enter a new value to overwrite it',
     secretKeepPlaceholder: 'Leave blank to keep the current value',
     notConfigured: 'Not configured yet.',
-    ntfy: {
-      description: 'Best for lightweight delivery. The topic URL is not sensitive and can be displayed directly.',
-    },
-    bark: {
-      description: 'The URL contains a device key and is intentionally hidden.',
-      configuredHint: 'A sensitive value is configured and hidden on this page.',
-    },
-    gotify: {
-      description: 'URL and token must be configured together.',
-    },
-    wecom: {
-      title: 'WeCom Bot',
-      description: 'The bot URL contains a key, so it is hidden and can only be updated or cleared.',
-      urlLabel: 'WeCom Bot URL',
-      configuredHint: 'Bot URL is already stored.',
-    },
+
     wecomApp: {
       title: 'WeCom App',
       description: 'Send through a WeCom custom app. Corp Secret is hidden; Corp ID, Agent ID, and default recipients can be edited directly.',

@@ -11,7 +11,7 @@
 - **AI 驱动**: 自然语言创建任务，多模态模型深度分析商品
 - **多任务并发**: 独立配置关键词、价格、筛选条件和 AI Prompt
 - **高级筛选**: 包邮、新发布时间范围、省/市/区三级区域筛选
-- **即时通知**: 支持 ntfy.sh、企业微信、Bark、Telegram、Webhook等多渠道
+- **即时通知**: 支持企业微信应用、Telegram，以及高级 Webhook 兼容通道
 - **定时调度**: 支持 Cron 配置周期性任务
 - **账号与代理轮换**: 多账号管理、任务绑定账号、代理池轮换与失败重试
 - **Docker 部署**: 一键容器化部署
@@ -207,15 +207,11 @@ cd web-ui && npm run build
 
 ### 通知
 
-- `NTFY_TOPIC_URL`
-- `GOTIFY_URL` / `GOTIFY_TOKEN`
-- `BARK_URL`
-- `WX_BOT_URL`
 - `WECOM_APP_CORPID` / `WECOM_APP_SECRET` / `WECOM_APP_AGENTID` / `WECOM_APP_TOUSER`
 - `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` / `TELEGRAM_API_BASE_URL`
 - `WEBHOOK_*`
 
-任务可配置 `notification_targets` 做任务级通知路由：为空时使用全局默认通知；目标项会路由到指定渠道与接收人；企业微信应用 `wecom_app` 的接收人可填 `@all` 或 `userid1|userid2`。
+任务可配置 `notification_targets` 做任务级通知路由：为空时使用全局默认通知；任务级目标仅支持 `wecom_app`、`telegram` 和 `default`；企业微信应用 `wecom_app` 的接收人可填 `@all` 或 `userid1|userid2`。旧的 `NTFY_TOPIC_URL`、`GOTIFY_*`、`BARK_URL` 和 `WX_BOT_URL` 环境值不会被自动删除，但不再作为有效通知渠道使用。
 
 ### 代理轮换与失败保护
 

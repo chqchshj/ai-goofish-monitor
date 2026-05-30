@@ -143,11 +143,6 @@ def _fetch_wecom_app_resource(path: str, params: dict) -> dict:
 class NotificationSettingsModel(BaseModel):
     """通知设置模型"""
 
-    NTFY_TOPIC_URL: Optional[str] = None
-    GOTIFY_URL: Optional[str] = None
-    GOTIFY_TOKEN: Optional[str] = None
-    BARK_URL: Optional[str] = None
-    WX_BOT_URL: Optional[str] = None
     WECOM_APP_CORPID: Optional[str] = None
     WECOM_APP_SECRET: Optional[str] = None
     WECOM_APP_AGENTID: Optional[str] = None

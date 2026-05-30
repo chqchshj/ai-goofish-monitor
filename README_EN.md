@@ -11,7 +11,7 @@ A Playwright and AI-powered multi-task toolbox for Xianyu (闲鱼), featuring re
 - **Multi-Task Concurrency**: Independent configuration for keywords, prices, filters, and AI prompts
 - **SQLite as Primary Storage**: Tasks, results, and price history are persisted in one embedded database instead of repeatedly scanning `jsonl`
 - **Advanced Filtering**: Free shipping, new listing time range, province/city/district filtering
-- **Instant Notifications**: Supports ntfy.sh, WeChat Work (企业微信), Bark, Telegram, Webhook
+- **Instant Notifications**: Supports WeCom App, Telegram, and advanced Webhook compatibility
 - **Scheduled Tasks**: Cron expression configuration for periodic tasks
 - **Account & Proxy Rotation**: Multi-account management, task-account binding, proxy pool rotation with failure retry
 - **Docker Deployment**: One-click containerized deployment
@@ -193,15 +193,11 @@ cd web-ui && npm run build
 
 ### Notifications
 
-- `NTFY_TOPIC_URL`
-- `GOTIFY_URL` / `GOTIFY_TOKEN`
-- `BARK_URL`
-- `WX_BOT_URL`
 - `WECOM_APP_CORPID` / `WECOM_APP_SECRET` / `WECOM_APP_AGENTID` / `WECOM_APP_TOUSER`
 - `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` / `TELEGRAM_API_BASE_URL`
 - `WEBHOOK_*`
 
-Tasks can use `notification_targets` for task-level routing: an empty list uses global defaults; each target routes to the selected channel and recipient; a `wecom_app` recipient may be `@all` or `userid1|userid2`.
+Tasks can use `notification_targets` for task-level routing: an empty list uses global defaults; task-level targets only support `wecom_app`, `telegram`, and `default`; a `wecom_app` recipient may be `@all` or `userid1|userid2`. Existing `NTFY_TOPIC_URL`, `GOTIFY_*`, `BARK_URL`, and `WX_BOT_URL` env values are not deleted automatically, but they are no longer valid notification channels.
 
 ### Proxy Rotation and Failure Guard
 

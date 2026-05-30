@@ -1,6 +1,6 @@
 // Based on the Pydantic model in the backend
 
-export type NotificationChannel = 'telegram' | 'wecom_app' | 'wecom' | 'default';
+export type NotificationChannel = 'telegram' | 'wecom_app' | 'default';
 
 export interface NotificationTarget {
   channel: NotificationChannel;

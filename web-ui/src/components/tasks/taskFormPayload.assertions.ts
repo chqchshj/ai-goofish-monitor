@@ -32,7 +32,7 @@ assertJsonEqual(
     { channel: 'telegram', recipient: ' 123 ' },
     { channel: 'default', recipient: ' ignored ' },
     { channel: 'email', recipient: 'bad' },
-    { channel: 'wecom', recipient: '' },
+    { channel: 'wecom', recipient: 'retired' },
   ]),
   [
     { channel: 'wecom_app', recipient: '@all', label: 'all' },

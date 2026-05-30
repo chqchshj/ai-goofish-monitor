@@ -12,11 +12,6 @@ from src.infrastructure.config.settings import (
 
 
 NOTIFICATION_FIELD_MAP = {
-    "NTFY_TOPIC_URL": "ntfy_topic_url",
-    "GOTIFY_URL": "gotify_url",
-    "GOTIFY_TOKEN": "gotify_token",
-    "BARK_URL": "bark_url",
-    "WX_BOT_URL": "wx_bot_url",
     "WECOM_APP_CORPID": "wecom_app_corpid",
     "WECOM_APP_SECRET": "wecom_app_secret",
     "WECOM_APP_AGENTID": "wecom_app_agentid",
@@ -34,10 +29,6 @@ NOTIFICATION_FIELD_MAP = {
 }
 
 CHANNEL_NOTIFICATION_FIELDS = {
-    "ntfy": {"NTFY_TOPIC_URL"},
-    "bark": {"BARK_URL"},
-    "gotify": {"GOTIFY_URL", "GOTIFY_TOKEN"},
-    "wecom": {"WX_BOT_URL"},
     "wecom_app": {"WECOM_APP_CORPID", "WECOM_APP_SECRET", "WECOM_APP_AGENTID", "WECOM_APP_TOUSER"},
     "telegram": {
         "TELEGRAM_BOT_TOKEN",
@@ -55,13 +46,9 @@ CHANNEL_NOTIFICATION_FIELDS = {
 }
 
 PREFERRED_NOTIFICATION_CHANNELS = ("wecom_app",)
-DEPRECATED_NOTIFICATION_CHANNELS = ("ntfy", "bark", "gotify", "wecom")
-ADVANCED_COMPAT_NOTIFICATION_CHANNELS = ("telegram", "webhook")
+ADVANCED_COMPAT_NOTIFICATION_CHANNELS = ("webhook",)
 
 SECRET_NOTIFICATION_FIELDS = {
-    "BARK_URL",
-    "GOTIFY_TOKEN",
-    "WX_BOT_URL",
     "WECOM_APP_SECRET",
     "TELEGRAM_BOT_TOKEN",
     "WEBHOOK_URL",
@@ -75,10 +62,6 @@ JSON_NOTIFICATION_FIELDS = {
 }
 
 URL_FIELDS = {
-    "NTFY_TOPIC_URL",
-    "GOTIFY_URL",
-    "BARK_URL",
-    "WX_BOT_URL",
     "TELEGRAM_API_BASE_URL",
     "WEBHOOK_URL",
 }
@@ -102,11 +85,6 @@ def build_notification_settings_response(
 ) -> dict:
     notification_settings = settings or load_notification_settings()
     response = {
-        "NTFY_TOPIC_URL": notification_settings.ntfy_topic_url or "",
-        "GOTIFY_URL": notification_settings.gotify_url or "",
-        "GOTIFY_TOKEN": "",
-        "BARK_URL": "",
-        "WX_BOT_URL": "",
         "WECOM_APP_CORPID": notification_settings.wecom_app_corpid or "",
         "WECOM_APP_SECRET": "",
         "WECOM_APP_AGENTID": notification_settings.wecom_app_agentid or "",
@@ -126,13 +104,12 @@ def build_notification_settings_response(
         "PCURL_TO_MOBILE": notification_settings.pcurl_to_mobile,
     }
     for field in SECRET_NOTIFICATION_FIELDS:
+        if field not in response and field not in {"WECOM_APP_SECRET", "TELEGRAM_BOT_TOKEN", "WEBHOOK_URL", "WEBHOOK_HEADERS"}:
+            continue
         attr_name = NOTIFICATION_FIELD_MAP[field]
         response[f"{field}_SET"] = bool(getattr(notification_settings, attr_name))
     response["CONFIGURED_CHANNELS"] = build_configured_channels(notification_settings)
     response["PREFERRED_CHANNELS"] = list(PREFERRED_NOTIFICATION_CHANNELS)
-    response["DEPRECATED_CHANNELS"] = get_deprecated_notification_channels(
-        notification_settings
-    )
     response["ADVANCED_COMPAT_CHANNELS"] = list(ADVANCED_COMPAT_NOTIFICATION_CHANNELS)
     return response
 
@@ -142,11 +119,6 @@ def build_notification_status_flags(
 ) -> dict:
     notification_settings = settings or load_notification_settings()
     return {
-        "ntfy_topic_url_set": bool(notification_settings.ntfy_topic_url),
-        "gotify_url_set": bool(notification_settings.gotify_url),
-        "gotify_token_set": bool(notification_settings.gotify_token),
-        "bark_url_set": bool(notification_settings.bark_url),
-        "wx_bot_url_set": bool(notification_settings.wx_bot_url),
         "wecom_app_corpid_set": bool(notification_settings.wecom_app_corpid),
         "wecom_app_secret_set": bool(notification_settings.wecom_app_secret),
         "wecom_app_agentid_set": bool(notification_settings.wecom_app_agentid),
@@ -163,14 +135,6 @@ def build_configured_channels(
 ) -> list[str]:
     notification_settings = settings or load_notification_settings()
     channels = []
-    if notification_settings.ntfy_topic_url:
-        channels.append("ntfy")
-    if notification_settings.bark_url:
-        channels.append("bark")
-    if notification_settings.gotify_url and notification_settings.gotify_token:
-        channels.append("gotify")
-    if notification_settings.wx_bot_url:
-        channels.append("wecom")
     if (notification_settings.wecom_app_corpid
             and notification_settings.wecom_app_secret
             and notification_settings.wecom_app_agentid):
@@ -180,17 +144,6 @@ def build_configured_channels(
     if notification_settings.webhook_url:
         channels.append("webhook")
     return channels
-
-
-def get_deprecated_notification_channels(
-    settings: NotificationSettings | None = None,
-) -> list[str]:
-    configured_channels = build_configured_channels(settings)
-    return [
-        channel
-        for channel in configured_channels
-        if channel in DEPRECATED_NOTIFICATION_CHANNELS
-    ]
 
 
 def prepare_notification_settings_update(
@@ -290,11 +243,6 @@ def _build_channel_test_values(
 def load_notification_settings() -> NotificationSettings:
     return _build_notification_settings_model(
         {
-            "ntfy_topic_url": _normalize_existing_text(env_manager.get_value("NTFY_TOPIC_URL")),
-            "gotify_url": _normalize_existing_text(env_manager.get_value("GOTIFY_URL")),
-            "gotify_token": _normalize_existing_text(env_manager.get_value("GOTIFY_TOKEN")),
-            "bark_url": _normalize_existing_text(env_manager.get_value("BARK_URL")),
-            "wx_bot_url": _normalize_existing_text(env_manager.get_value("WX_BOT_URL")),
             "wecom_app_corpid": _normalize_existing_text(env_manager.get_value("WECOM_APP_CORPID")),
             "wecom_app_secret": _normalize_existing_text(env_manager.get_value("WECOM_APP_SECRET")),
             "wecom_app_agentid": _normalize_existing_text(env_manager.get_value("WECOM_APP_AGENTID")),
@@ -373,12 +321,6 @@ def _validate_notification_settings(settings: NotificationSettings) -> None:
         if value is not None:
             _validate_http_url(field_name, value)
 
-    _validate_pair(
-        "GOTIFY_URL",
-        settings.gotify_url,
-        "GOTIFY_TOKEN",
-        settings.gotify_token,
-    )
     _validate_pair(
         "TELEGRAM_BOT_TOKEN",
         settings.telegram_bot_token,

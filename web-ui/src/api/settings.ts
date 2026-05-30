@@ -1,11 +1,6 @@
 import { http } from '@/lib/http'
 
 export interface NotificationSettings {
-  NTFY_TOPIC_URL?: string
-  GOTIFY_URL?: string
-  GOTIFY_TOKEN?: string
-  BARK_URL?: string
-  WX_BOT_URL?: string
   WECOM_APP_CORPID?: string
   WECOM_APP_SECRET?: string
   WECOM_APP_AGENTID?: string
@@ -20,25 +15,16 @@ export interface NotificationSettings {
   WEBHOOK_QUERY_PARAMETERS?: string
   WEBHOOK_BODY?: string
   PCURL_TO_MOBILE?: boolean
-  BARK_URL_SET?: boolean
-  GOTIFY_TOKEN_SET?: boolean
-  WX_BOT_URL_SET?: boolean
   WECOM_APP_SECRET_SET?: boolean
   TELEGRAM_BOT_TOKEN_SET?: boolean
   WEBHOOK_URL_SET?: boolean
   WEBHOOK_HEADERS_SET?: boolean
   CONFIGURED_CHANNELS?: string[]
   PREFERRED_CHANNELS?: string[]
-  DEPRECATED_CHANNELS?: string[]
   ADVANCED_COMPAT_CHANNELS?: string[]
 }
 
 export interface NotificationSettingsUpdate {
-  NTFY_TOPIC_URL?: string | null
-  GOTIFY_URL?: string | null
-  GOTIFY_TOKEN?: string | null
-  BARK_URL?: string | null
-  WX_BOT_URL?: string | null
   WECOM_APP_CORPID?: string | null
   WECOM_APP_SECRET?: string | null
   WECOM_APP_AGENTID?: string | null
@@ -113,11 +99,6 @@ export interface SystemStatus {
     openai_api_key_set: boolean
     openai_base_url_set: boolean
     openai_model_name_set: boolean
-    ntfy_topic_url_set: boolean
-    gotify_url_set: boolean
-    gotify_token_set: boolean
-    bark_url_set: boolean
-    wx_bot_url_set: boolean
     wecom_app_corpid_set: boolean
     wecom_app_secret_set: boolean
     wecom_app_agentid_set: boolean

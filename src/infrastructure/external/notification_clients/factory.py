@@ -3,26 +3,14 @@
 """
 from src.infrastructure.config.settings import NotificationSettings
 
-from .bark_client import BarkClient
-from .gotify_client import GotifyClient
-from .ntfy_client import NtfyClient
 from .telegram_client import TelegramClient
 from .wecom_app_client import WeComAppClient
-from .wecom_bot_client import WeComBotClient
 from .webhook_client import WebhookClient
 
 
 def build_notification_clients(settings: NotificationSettings):
     pcurl_to_mobile = settings.pcurl_to_mobile
     return [
-        NtfyClient(settings.ntfy_topic_url, pcurl_to_mobile=pcurl_to_mobile),
-        BarkClient(settings.bark_url, pcurl_to_mobile=pcurl_to_mobile),
-        GotifyClient(
-            settings.gotify_url,
-            settings.gotify_token,
-            pcurl_to_mobile=pcurl_to_mobile,
-        ),
-        WeComBotClient(settings.wx_bot_url, pcurl_to_mobile=pcurl_to_mobile),
         WeComAppClient(
             corpid=settings.wecom_app_corpid,
             corpsecret=settings.wecom_app_secret,
@@ -79,9 +67,5 @@ def build_notification_clients_for_targets(settings: NotificationSettings, targe
                     touser=recipient,
                     pcurl_to_mobile=pcurl_to_mobile,
                 )
-            )
-        elif channel == "wecom" and recipient:
-            clients.append(
-                WeComBotClient(recipient, pcurl_to_mobile=pcurl_to_mobile)
             )
     return clients

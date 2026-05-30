@@ -82,7 +82,7 @@ def _normalize_payload_keywords(payload: Any) -> Any:
     return values
 
 
-ALLOWED_NOTIFICATION_CHANNELS = {"telegram", "wecom_app", "wecom", "default"}
+ALLOWED_NOTIFICATION_CHANNELS = {"telegram", "wecom_app", "default"}
 
 
 def _normalize_notification_targets(value, *, allow_none: bool = False):

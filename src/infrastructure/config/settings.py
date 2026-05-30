@@ -57,11 +57,6 @@ class AISettings(_EnvSettings):
 
 class NotificationSettings(_EnvSettings):
     """通知服务配置"""
-    ntfy_topic_url: Optional[str] = _env_field(None, "NTFY_TOPIC_URL")
-    gotify_url: Optional[str] = _env_field(None, "GOTIFY_URL")
-    gotify_token: Optional[str] = _env_field(None, "GOTIFY_TOKEN")
-    bark_url: Optional[str] = _env_field(None, "BARK_URL")
-    wx_bot_url: Optional[str] = _env_field(None, "WX_BOT_URL")
     wecom_app_corpid: Optional[str] = _env_field(None, "WECOM_APP_CORPID")
     wecom_app_secret: Optional[str] = _env_field(None, "WECOM_APP_SECRET")
     wecom_app_agentid: Optional[str] = _env_field(None, "WECOM_APP_AGENTID")
@@ -83,11 +78,7 @@ class NotificationSettings(_EnvSettings):
     def has_any_notification_enabled(self) -> bool:
         """检查是否配置了任何通知服务"""
         return any([
-            self.ntfy_topic_url,
-            self.wx_bot_url,
             self.wecom_app_corpid and self.wecom_app_secret and self.wecom_app_agentid,
-            self.gotify_url and self.gotify_token,
-            self.bark_url,
             self.telegram_bot_token and self.telegram_chat_id,
             self.webhook_url
         ])

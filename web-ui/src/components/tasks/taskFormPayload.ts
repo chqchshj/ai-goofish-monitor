@@ -82,7 +82,7 @@ export function normalizeNotificationTargets(value: unknown): NotificationTarget
     const recipient = channel === 'default' ? '' : String(raw.recipient || '').trim()
     const label = String(raw.label || '').trim()
     if (!channel && !recipient) continue
-    if (!['telegram', 'wecom_app', 'wecom', 'default'].includes(channel)) continue
+    if (!['telegram', 'wecom_app', 'default'].includes(channel)) continue
     if (channel !== 'default' && !recipient) continue
     const key = `${channel}:${recipient}`
     if (seen.has(key)) continue
