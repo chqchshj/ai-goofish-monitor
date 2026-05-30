@@ -10,7 +10,7 @@ A Playwright and AI-powered multi-task toolbox for Xianyu (闲鱼), featuring re
 - **AI-Driven**: Natural language task creation, multimodal model for in-depth product analysis
 - **Multi-Task Concurrency**: Independent configuration for keywords, prices, filters, and AI prompts
 - **SQLite as Primary Storage**: Tasks, results, and price history are persisted in one embedded database instead of repeatedly scanning `jsonl`
-- **Advanced Filtering**: Free shipping, new listing time range, province/city/district filtering
+- **Advanced Filtering**: Free shipping, YHB inspection, new listing time range, province/city/district filtering
 - **Instant Notifications**: Supports WeCom App, Telegram, and advanced Webhook compatibility
 - **Scheduled Tasks**: Cron expression configuration for periodic tasks
 - **Account & Proxy Rotation**: Multi-account management, task-account binding, proxy pool rotation with failure retry
@@ -113,7 +113,8 @@ docker compose down
 
 ### Task Management
 
-- Supports AI creation, keyword rules, price range, new listing filters, region filters, account binding, and cron scheduling.
+- The task form is grouped into collapsible sections for basic info, decision mode, search filters, schedule/account, and notification targets.
+- Supports AI creation, keyword rules, price range, new listing filters, free shipping, YHB inspection, region filters, account binding, and cron scheduling.
 - AI task creation runs as a background job and shows a dedicated progress dialog after submission.
 - Region filtering can greatly reduce results, so leaving it empty is the safer default.
 
@@ -125,6 +126,7 @@ docker compose down
 ### Results and Logs
 
 - The results page and export endpoints now query SQLite instead of directly scanning `jsonl` files.
+- The results page supports YHB and free-shipping filters. A personal-seller filter is not shown because stored result records do not contain a reliable personal-seller field.
 - The logs page is the first place to inspect login-state expiry, anti-bot issues, or AI call failures.
 
 ### System Settings
