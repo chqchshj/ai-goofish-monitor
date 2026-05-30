@@ -185,6 +185,9 @@ const zhCN = {
       showAll: '展开全部',
       showLess: '收起',
       moreHidden: '还有 {count} 个卖家未显示',
+      activeFilter: '当前卖家：{seller}',
+      clearFilter: '清除',
+      clearFilterAria: '清除卖家筛选',
     },
     grid: {
       loading: '正在加载结果...',

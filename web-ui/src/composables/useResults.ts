@@ -49,6 +49,7 @@ export function useResults() {
       filters[key] = nextFilters[key]
     })
     filters.sort = nextFilters.sort
+    filters.seller = nextFilters.seller
   }
 
   const filters = reactive<ResultFilters>(parseFiltersFromQuery())
@@ -185,7 +186,10 @@ export function useResults() {
     }
 
     try {
-      sellerAggregation.value = await resultsApi.getSellerAggregation(selectedFile.value, { ...filters })
+      sellerAggregation.value = await resultsApi.getSellerAggregation(selectedFile.value, {
+        ...filters,
+        seller: undefined,
+      })
     } catch (e) {
       if (e instanceof Error) error.value = e
       sellerAggregation.value = null
@@ -265,6 +269,14 @@ export function useResults() {
   function exportSelectedResults() {
     if (!selectedFile.value) return
     resultsApi.downloadResultExport(selectedFile.value, { ...filters })
+  }
+
+  function selectSellerFilter(sellerNickname: string) {
+    filters.seller = sellerNickname.trim()
+  }
+
+  function clearSellerFilter() {
+    filters.seller = ''
   }
 
   async function deleteSelectedFile(filename?: string) {
@@ -371,6 +383,9 @@ export function useResults() {
     clearSelection()
     fetchResults()
   }, { deep: true })
+  watch(filters, () => {
+    fetchSellerAggregation()
+  }, { deep: true })
   watch(selectedFile, () => {
     fetchInsights()
     fetchSellerAggregation()
@@ -458,6 +473,8 @@ export function useResults() {
     refreshResults,
     fetchSellerAggregation,
     exportSelectedResults,
+    selectSellerFilter,
+    clearSellerFilter,
     clearSelection,
     toggleItemSelection,
     toggleCurrentPageSelection,

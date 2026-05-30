@@ -7,6 +7,7 @@ export type ResultFilters = Required<Pick<
   | 'include_hidden'
   | 'yhb_only'
   | 'free_shipping_only'
+  | 'seller'
   | 'personal_seller_only'
   | 'processed_only'
   | 'contacted_only'
@@ -23,6 +24,7 @@ export const DEFAULT_RESULT_FILTERS: ResultFilters = {
   include_hidden: false,
   yhb_only: false,
   free_shipping_only: false,
+  seller: '',
   personal_seller_only: false,
   processed_only: false,
   contacted_only: false,
@@ -70,6 +72,10 @@ export function parseResultSortQuery(value: ResultQueryValue): ResultSort {
     : DEFAULT_RESULT_FILTERS.sort
 }
 
+export function parseResultTextQuery(value: ResultQueryValue): string {
+  return (getResultQueryValue(value) || '').trim()
+}
+
 export function parseResultFiltersFromQuery(query: ResultRouteQuery): ResultFilters {
   return {
     ...DEFAULT_RESULT_FILTERS,
@@ -78,6 +84,7 @@ export function parseResultFiltersFromQuery(query: ResultRouteQuery): ResultFilt
     include_hidden: parseResultBooleanQuery(query.include_hidden),
     yhb_only: parseResultBooleanQuery(query.yhb_only),
     free_shipping_only: parseResultBooleanQuery(query.free_shipping_only),
+    seller: parseResultTextQuery(query.seller),
     personal_seller_only: parseResultBooleanQuery(query.personal_seller_only),
     processed_only: parseResultBooleanQuery(query.processed_only),
     contacted_only: parseResultBooleanQuery(query.contacted_only),
@@ -98,6 +105,9 @@ export function buildResultQuery(filters: ResultFilters, selectedFile: string | 
   })
   if (filters.sort !== DEFAULT_RESULT_FILTERS.sort) {
     query.sort = filters.sort
+  }
+  if (filters.seller) {
+    query.seller = filters.seller
   }
   return query
 }

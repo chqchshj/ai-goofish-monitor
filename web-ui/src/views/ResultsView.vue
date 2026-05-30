@@ -35,6 +35,8 @@ const {
   error,
   refreshResults,
   exportSelectedResults,
+  selectSellerFilter,
+  clearSellerFilter,
   deleteSelectedFile,
   clearSelection,
   toggleItemSelection,
@@ -197,7 +199,24 @@ async function handleSaveBlacklistRules() {
 
     <ResultsInsightsPanel :insights="insights" :selected-task-label="selectedTaskLabel" />
 
-    <SellersPanel :aggregation="sellerAggregation" />
+    <SellersPanel :aggregation="sellerAggregation" @select-seller="selectSellerFilter" />
+
+    <div
+      v-if="filters.seller"
+      class="mb-4 flex flex-wrap items-center gap-2 text-sm"
+    >
+      <span class="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-700">
+        {{ t('results.sellers.activeFilter', { seller: filters.seller }) }}
+      </span>
+      <Button
+        size="sm"
+        variant="ghost"
+        :aria-label="t('results.sellers.clearFilterAria')"
+        @click="clearSellerFilter"
+      >
+        {{ t('results.sellers.clearFilter') }}
+      </Button>
+    </div>
 
     <div
       v-if="results.length > 0"
