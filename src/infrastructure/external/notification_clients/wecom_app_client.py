@@ -71,8 +71,20 @@ class WeComAppClient(NotificationClient):
             f"📦 商品: {safe_title}",
             f"💰 价格: {safe_price}",
             f"📝 原因: {safe_reason}",
-            "📱 点击卡片或下方按钮查看详情",
         ]
+        if message.region:
+            description_lines.append(f"📍 地区: {html.escape(message.region)}")
+        badge_parts = []
+        if message.inspection_service:
+            badge_parts.append("验货宝")
+        if message.free_shipping:
+            badge_parts.append("包邮")
+        if badge_parts:
+            description_lines.append(f"🏷️ {' · '.join(badge_parts)}")
+        if message.seller_type_persona:
+            safe_persona = html.escape(message.seller_type_persona)
+            description_lines.append(f"👤 卖家: {safe_persona}")
+        description_lines.append("📱 点击卡片或下方按钮查看详情")
 
         payload = {
             "touser": self.touser,

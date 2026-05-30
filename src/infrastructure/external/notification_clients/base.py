@@ -19,6 +19,15 @@ class NotificationMessage:
     notification_title: str
     content: str
     image_url: str | None
+    # -- P4-2 enriched fields --
+    region: str = ""
+    tags: list[str] | None = None
+    free_shipping: bool = False
+    inspection_service: bool = False
+    seller_nickname: str = ""
+    seller_type_persona: str = ""
+    seller_type_status: str = ""
+    seller_type_comment: str = ""
 
 
 class NotificationClient(ABC):
@@ -79,6 +88,17 @@ class NotificationClient(ABC):
             if image_list:
                 main_image = image_list[0]
 
+        # -- P4-2 enriched fields --
+        region = str(product_data.get('发货地区', ''))
+        tags = list(product_data.get('商品标签', []) or [])
+        free_shipping = '包邮' in tags
+        inspection_service = '验货宝' in tags
+        seller_nickname = str(product_data.get('卖家昵称', ''))
+        # Underscore-prefixed keys carry extra context from the pipeline layer
+        seller_type_persona = str(product_data.get('_seller_type_persona', ''))
+        seller_type_status = str(product_data.get('_seller_type_status', ''))
+        seller_type_comment = str(product_data.get('_seller_type_comment', ''))
+
         return NotificationMessage(
             title=title,
             price=price,
@@ -88,4 +108,12 @@ class NotificationClient(ABC):
             notification_title=notification_title,
             content="\n".join(content_lines),
             image_url=main_image,
+            region=region,
+            tags=tags,
+            free_shipping=free_shipping,
+            inspection_service=inspection_service,
+            seller_nickname=seller_nickname,
+            seller_type_persona=seller_type_persona,
+            seller_type_status=seller_type_status,
+            seller_type_comment=seller_type_comment,
         )

@@ -46,8 +46,23 @@ class ResultPipelineService:
         if not analysis_result.get("is_recommended"):
             return False
         try:
+            # Enrich item_data with seller_type context from ai_analysis
+            # (underscore-prefixed keys to avoid collision with real fields)
+            item_data = dict(record.get("商品信息", {}) or {})
+            criteria = (analysis_result.get("criteria_analysis", {}) or {})
+            seller_type = criteria.get("seller_type", {}) or {}
+            if seller_type:
+                item_data["_seller_type_persona"] = str(
+                    seller_type.get("persona", "")
+                )
+                item_data["_seller_type_status"] = str(
+                    seller_type.get("status", "")
+                )
+                item_data["_seller_type_comment"] = str(
+                    seller_type.get("comment", "")
+                )
             await self._notifier(
-                record.get("商品信息", {}) or {},
+                item_data,
                 analysis_result.get("reason", "无"),
                 notification_targets,
             )

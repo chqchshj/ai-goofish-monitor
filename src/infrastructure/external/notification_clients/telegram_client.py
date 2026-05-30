@@ -45,6 +45,17 @@ class TelegramClient(NotificationClient):
             f"💰 价格: {message.price}",
             f"📝 原因: {message.reason}",
         ]
+        if message.region:
+            telegram_message.append(f"📍 地区: {message.region}")
+        badge_parts = []
+        if message.inspection_service:
+            badge_parts.append("验货宝")
+        if message.free_shipping:
+            badge_parts.append("包邮")
+        if badge_parts:
+            telegram_message.append(f"🏷️ {' · '.join(badge_parts)}")
+        if message.seller_type_persona:
+            telegram_message.append(f"👤 卖家: {message.seller_type_persona}")
         if message.mobile_link:
             telegram_message.append(f"📱 <a href='{message.mobile_link}'>手机端链接</a>")
         telegram_message.append(f"💻 <a href='{message.desktop_link}'>电脑端链接</a>")
