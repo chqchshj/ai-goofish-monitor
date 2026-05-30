@@ -5,6 +5,17 @@
 基于 Playwright 和 AI 的闲鱼多任务实时监控工具箱，提供完整的 Web 管理界面。
 
 
+## 本 fork 与上游区别
+
+本仓库是从上游 `ai-goofish-monitor` fork 后继续维护的 `xianyu-tools / 闲鱼工具箱`。默认 Docker Compose 会从当前本地源码构建 `xianyu-tools:local` 镜像，以确保包含本 fork 的功能；上游官方镜像 `ghcr.io/usagi-org/ai-goofish:latest` 不包含或不保证包含这些 fork-only 改动。
+
+- **后端与运行时**：继续采用 FastAPI + Vue + Playwright + SQLite 的运行形态，保留 `scrape_xianyu(task_config, debug_limit)` 兼容入口，通过 strangler-style 渐进重构替换旧路径，而不是整仓重写。
+- **存储**：SQLite 是任务、结果、价格历史的主存储；启动时兼容导入旧 `config.json`、`jsonl/`、`price_history/` 数据。
+- **通知**：保留企业微信应用、Telegram、通用 Webhook；Web UI 可以写入 `.env`。旧 `ntfy`、Bark、微信机器人、Gotify 配置仅作为兼容/忽略项保留，不再作为有效通知渠道。
+- **任务与搜索筛选**：恢复并贯通 `yhb_only` / 验货宝筛选；支持包邮、个人卖家、发布时间、区域、价格等搜索筛选；任务表单按功能分组折叠。
+- **结果筛选**：结果页和 CSV 导出共用验货宝、包邮、AI `seller_type` 个人卖家筛选语义，避免页面与导出结果不一致。
+- **账号与运行稳定性**：支持账号与代理轮换、任务绑定账号、失败重试；`failure_guard` 使用 cookie fingerprint（`mtime_ns`、`size`、`sha256`）检测登录态变化，避免文件 `mtime` 未推进导致任务无法自动恢复。
+
 ## 核心特性
 
 - **Web 可视化管理**: 任务管理、账号管理、AI 标准编辑、运行日志、结果浏览
@@ -71,12 +82,10 @@ docker compose up -d
 
 ### 最少配置
 
-| 变量 | 说明 | 必填 |
-|------|------|------|
-| `OPENAI_API_KEY` | AI 模型 API Key | 是 |
-| `OPENAI_BASE_URL` | OpenAI 兼容接口地址 | 是 |
-| `OPENAI_MODEL_NAME` | 支持图片输入的模型名称 | 是 |
-| `WEB_USERNAME` / `WEB_PASSWORD` | Web UI 登录账号密码，默认 `admin/admin123` | 否 |
+- `OPENAI_API_KEY`：AI 模型 API Key，必填。
+- `OPENAI_BASE_URL`：OpenAI 兼容接口地址，必填。
+- `OPENAI_MODEL_NAME`：支持图片输入的模型名称，必填。
+- `WEB_USERNAME` / `WEB_PASSWORD`：Web UI 登录账号密码，默认 `admin/admin123`，可选。
 
 其余配置见下方“配置说明”。
 

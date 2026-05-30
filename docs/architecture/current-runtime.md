@@ -3,6 +3,35 @@
 `xianyu-tools / 闲鱼工具箱` currently preserves the ai-goofish-monitor runtime
 architecture.
 
+## Fork delta from upstream
+
+This fork is maintained as `xianyu-tools / 闲鱼工具箱` after diverging from
+upstream `ai-goofish-monitor`. Runtime compatibility is intentional: the task
+process still reaches `scrape_xianyu(task_config, debug_limit)`, while newer
+services and persistence paths are introduced through a strangler-style gradual
+refactor instead of a full repository rewrite.
+
+- Docker Compose builds `xianyu-tools:local` from the local source tree by
+  default. The upstream official image does not include, or does not guarantee,
+  this fork's local-only changes.
+- The primary runtime stack is FastAPI, Vue, Playwright, and SQLite.
+- SQLite is the primary store for tasks, results, and price history, with
+  compatibility import from legacy `config.json`, `jsonl/`, and
+  `price_history/` sources.
+- Notification delivery supports WeCom App, Telegram, and generic Webhook.
+  The Web UI can persist settings into `.env`. Legacy `ntfy`, Bark, WeChat bot,
+  and Gotify values are compatibility / ignored settings rather than active
+  delivery channels.
+- Task search filtering wires through `yhb_only` / YHB inspection, free
+  shipping, personal seller, publish time, region, and price filters. The Web
+  UI task form groups these settings into collapsible sections.
+- Result browsing and CSV export share YHB, free-shipping, and AI
+  `seller_type` personal-seller filtering semantics.
+- Account and proxy rotation, task-account binding, and retry handling are part
+  of the runtime path. `failure_guard` detects cookie changes with a fingerprint
+  made from `mtime_ns`, `size`, and `sha256`, avoiding recovery failures when
+  file `mtime` does not advance.
+
 ## Flow
 
 1. `src/app.py` creates the FastAPI application and wires API routes.

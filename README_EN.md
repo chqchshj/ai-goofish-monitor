@@ -4,6 +4,17 @@
 
 A Playwright and AI-powered multi-task toolbox for Xianyu (闲鱼), featuring real-time monitoring and a complete web management interface.
 
+## Fork Differences
+
+This repository is `xianyu-tools / Xianyu Toolbox`, maintained as a fork of upstream `ai-goofish-monitor`. The default Docker Compose setup builds `xianyu-tools:local` from the local source tree so fork-only functionality is present. The upstream published image `ghcr.io/usagi-org/ai-goofish:latest` does not include, or does not guarantee, these fork-only changes.
+
+- **Backend and runtime**: Keeps the FastAPI + Vue + Playwright + SQLite runtime shape, preserves the compatible `scrape_xianyu(task_config, debug_limit)` entry point, and uses a strangler-style gradual refactor instead of a full rewrite.
+- **Storage**: SQLite is the primary store for tasks, results, and price history. Legacy `config.json`, `jsonl/`, and `price_history/` data can still be imported for compatibility.
+- **Notifications**: Keeps WeCom App, Telegram, and generic Webhook support. The Web UI can write `.env`. Legacy `ntfy`, Bark, WeChat bot, and Gotify settings are retained only as compatibility / ignored fields and are no longer active notification channels.
+- **Task and search filters**: Restores and wires through `yhb_only` / YHB inspection filtering. Search filters include free shipping, personal seller, publish time, region, and price. The task form is split into collapsible groups.
+- **Result filters**: The results page and CSV export share the same YHB, free-shipping, and AI `seller_type` personal-seller semantics, so exports match the visible filtering rules.
+- **Accounts and runtime stability**: Supports account and proxy rotation, task-account binding, and failure retry. `failure_guard` detects cookie changes with a fingerprint (`mtime_ns`, `size`, `sha256`) so task recovery does not depend on file `mtime` moving forward.
+
 ## Core Features
 
 - **Web Visual Management**: Task management, account management, AI criteria editing, run logs, results browsing
@@ -40,12 +51,10 @@ cp .env.example .env
 
 ### Minimum Configuration
 
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `OPENAI_API_KEY` | AI model API key | Yes |
-| `OPENAI_BASE_URL` | OpenAI-compatible API base URL | Yes |
-| `OPENAI_MODEL_NAME` | Model name with image input support | Yes |
-| `WEB_USERNAME` / `WEB_PASSWORD` | Web UI login credentials, default `admin/admin123` | No |
+- `OPENAI_API_KEY`: AI model API key, required.
+- `OPENAI_BASE_URL`: OpenAI-compatible API base URL, required.
+- `OPENAI_MODEL_NAME`: model name with image input support, required.
+- `WEB_USERNAME` / `WEB_PASSWORD`: Web UI login credentials, default `admin/admin123`, optional.
 
 See "Configuration" below for the rest.
 
