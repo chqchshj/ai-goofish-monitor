@@ -19,6 +19,7 @@ from src.api.routes import tasks
 from src.infrastructure.persistence.sqlite_task_repository import SqliteTaskRepository
 from src.services.task_service import TaskService
 from src.services.task_generation_service import TaskGenerationService
+from src.services.task_run_status_service import TaskRunStatusService
 
 
 @pytest.fixture()
@@ -61,6 +62,7 @@ class FakeProcessService:
         self.reindexed = []
         self._on_started = None
         self._on_stopped = None
+        self.task_run_status_service = TaskRunStatusService()
 
     def set_lifecycle_hooks(self, *, on_started=None, on_stopped=None):
         self._on_started = on_started
@@ -68,17 +70,25 @@ class FakeProcessService:
 
     async def start_task(self, task_id: int, task_name: str) -> bool:
         self.started.append((task_id, task_name))
+        self.task_run_status_service.mark_running(
+            task_id,
+            pid=12345,
+            log_path=f"logs/{task_id}.log",
+        )
         if self._on_started:
             await self._on_started(task_id)
         return True
 
     async def stop_task(self, task_id: int):
         self.stopped.append(task_id)
+        self.task_run_status_service.mark_stopping(task_id)
+        self.task_run_status_service.mark_stopped(task_id, returncode=0)
         if self._on_stopped:
             await self._on_stopped(task_id)
 
     def reindex_after_delete(self, deleted_task_id: int):
         self.reindexed.append(deleted_task_id)
+        self.task_run_status_service.reindex_after_delete(deleted_task_id)
 
 
 class FakeSchedulerService:

@@ -15,6 +15,7 @@ from src.ai_handler import send_ntfy_notification
 from src.config import STATE_FILE
 from src.failure_guard import FailureGuard
 from src.infrastructure.persistence.sqlite_task_repository import find_task_by_name_sync
+from src.services.task_run_status_service import TaskRunStatusService
 from src.utils import build_task_log_path
 
 STOP_TIMEOUT_SECONDS = 20
@@ -32,6 +33,7 @@ class ProcessService:
         self.task_names: Dict[int, str] = {}
         self.exit_watchers: Dict[int, asyncio.Task] = {}
         self.failure_guard = FailureGuard()
+        self.task_run_status_service = TaskRunStatusService()
         self._on_started: LifecycleHook | None = None
         self._on_stopped: LifecycleHook | None = None
 
@@ -142,6 +144,10 @@ class ProcessService:
             cookie_path=self._resolve_cookie_path(task_name),
         )
         if decision.skip:
+            self.task_run_status_service.mark_skipped(
+                task_id,
+                message=f"FailureGuard 跳过启动: {decision.reason}",
+            )
             await self._notify_skip(task_name, decision)
             return False
 
@@ -149,13 +155,25 @@ class ProcessService:
         log_file_handle = None
         try:
             log_file_path, log_file_handle = self._open_log_file(task_id, task_name)
+            self.task_run_status_service.mark_starting(task_id, log_path=log_file_path)
             process = await self._spawn_process(task_name, log_file_handle)
         except Exception as exc:
             self._close_log_handle(log_file_handle)
+            self.task_run_status_service.mark_failed(
+                task_id,
+                error_category="spawn_failed",
+                message=f"启动任务进程失败: {exc}",
+                log_path=log_file_path or None,
+            )
             print(f"启动任务 '{task_name}' 失败: {exc}")
             return False
 
         self._register_runtime(task_id, task_name, process, log_file_path, log_file_handle)
+        self.task_run_status_service.mark_running(
+            task_id,
+            pid=process.pid,
+            log_path=log_file_path,
+        )
         print(f"启动任务 '{task_name}' (PID: {process.pid})")
         await self._invoke_hook(self._on_started, task_id)
         return True
@@ -204,6 +222,19 @@ class ProcessService:
     ) -> None:
         if self.processes.get(task_id) is not process:
             return
+        returncode = process.returncode
+        log_path = self.log_paths.get(task_id)
+        current_status = self.task_run_status_service.get_status(task_id)
+        if returncode == 0 or current_status.get("state") == "stopping":
+            self.task_run_status_service.mark_stopped(task_id, returncode=returncode)
+        else:
+            self.task_run_status_service.mark_failed(
+                task_id,
+                error_category="process_failed",
+                message=f"任务进程异常退出，returncode={returncode}",
+                returncode=returncode,
+                log_path=log_path,
+            )
         self.processes.pop(task_id, None)
         self.log_paths.pop(task_id, None)
         self.task_names.pop(task_id, None)
@@ -239,6 +270,7 @@ class ProcessService:
             return False
 
         try:
+            self.task_run_status_service.mark_stopping(task_id)
             await self._terminate_process(process, task_id)
             self._append_stop_marker(self.log_paths.get(task_id))
             await self._await_exit_watcher(task_id)
@@ -290,6 +322,7 @@ class ProcessService:
         self.log_handles = self._reindex_mapping(self.log_handles, deleted_task_id)
         self.task_names = self._reindex_mapping(self.task_names, deleted_task_id)
         self.exit_watchers = self._reindex_mapping(self.exit_watchers, deleted_task_id)
+        self.task_run_status_service.reindex_after_delete(deleted_task_id)
 
     def _reindex_mapping(self, mapping: Dict[int, object], deleted_task_id: int) -> Dict[int, object]:
         reindexed: Dict[int, object] = {}

@@ -84,6 +84,37 @@ const resolveNextRunLabel = (task: Task) => {
   return formatNextRunAbsolute(task.next_run_at)
 }
 
+const resolveRunStateLabel = (task: Task) => {
+  const state = task.task_run_status?.state || (task.is_running ? 'running' : 'idle')
+  const labels: Record<string, string> = {
+    idle: t('common.idle'),
+    starting: '启动中',
+    running: t('common.running'),
+    stopping: '停止中',
+    stopped: '已停止',
+    failed: '失败',
+    skipped: '已跳过',
+  }
+  return labels[state] || state
+}
+
+const resolveRunStateClass = (task: Task) => {
+  const state = task.task_run_status?.state || (task.is_running ? 'running' : 'idle')
+  if (state === 'running') return 'border-emerald-200 bg-emerald-50 text-emerald-700'
+  if (state === 'starting' || state === 'stopping') return 'border-amber-200 bg-amber-50 text-amber-700'
+  if (state === 'failed') return 'border-rose-200 bg-rose-50 text-rose-700'
+  if (state === 'skipped') return 'border-orange-200 bg-orange-50 text-orange-700'
+  if (state === 'stopped') return 'border-slate-200 bg-slate-100 text-slate-600'
+  return 'border-slate-200 bg-slate-50 text-slate-500'
+}
+
+const resolveRunMessage = (task: Task) => {
+  const status = task.task_run_status
+  if (!status) return null
+  if (status.state === 'idle' && !status.message) return null
+  return status.message || status.stage
+}
+
 const emit = defineEmits<{
   (e: 'delete-task', taskId: number): void
   (e: 'run-task', taskId: number): void
@@ -152,10 +183,17 @@ const emit = defineEmits<{
               />
               <Badge
                 variant="outline"
-                :class="task.is_running ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-slate-50 text-slate-500'"
+                :class="resolveRunStateClass(task)"
               >
-                {{ task.is_running ? t('common.running') : t('common.idle') }}
+                {{ resolveRunStateLabel(task) }}
               </Badge>
+              <p
+                v-if="resolveRunMessage(task)"
+                class="max-w-[150px] text-right text-[11px] leading-snug text-slate-400 line-clamp-2"
+                :title="resolveRunMessage(task) || undefined"
+              >
+                {{ resolveRunMessage(task) }}
+              </p>
             </div>
           </div>
 
@@ -332,10 +370,17 @@ const emit = defineEmits<{
                   @update:model-value="(val: boolean) => emit('toggle-enabled', task, val)"
                 />
                 <div class="flex items-center gap-1.5">
-                  <div :class="[ 'w-1.5 h-1.5 rounded-full shadow-sm', task.is_running ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300' ]"></div>
-                  <span :class="[ 'text-[9px] font-black tracking-widest uppercase', task.is_running ? 'text-emerald-600' : 'text-slate-400' ]">
-                    {{ task.is_running ? 'ACTIVE' : 'IDLE' }}
+                  <div :class="[ 'w-1.5 h-1.5 rounded-full shadow-sm', task.is_running ? 'bg-emerald-500 animate-pulse' : task.task_run_status?.state === 'failed' ? 'bg-rose-500' : 'bg-slate-300' ]"></div>
+                  <span :class="[ 'text-[9px] font-black tracking-widest uppercase', task.is_running ? 'text-emerald-600' : task.task_run_status?.state === 'failed' ? 'text-rose-600' : 'text-slate-400' ]">
+                    {{ resolveRunStateLabel(task) }}
                   </span>
+                </div>
+                <div
+                  v-if="resolveRunMessage(task)"
+                  class="max-w-[86px] text-center text-[9px] leading-tight text-slate-400 line-clamp-2"
+                  :title="resolveRunMessage(task) || undefined"
+                >
+                  {{ resolveRunMessage(task) }}
                 </div>
               </div>
             </TableCell>

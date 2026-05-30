@@ -59,36 +59,43 @@ def _validate_final_account_strategy(existing_task, task_update: TaskUpdate) -> 
 async def get_tasks(
     service: TaskService = Depends(get_task_service),
     scheduler_service: SchedulerService = Depends(get_scheduler_service),
+    process_service: ProcessService = Depends(get_process_service),
 ):
     """获取所有任务"""
     tasks = await service.get_all_tasks()
-    return serialize_tasks(tasks, scheduler_service)
+    return serialize_tasks(tasks, scheduler_service, process_service.task_run_status_service)
 @router.get("/{task_id}", response_model=dict)
 async def get_task(
     task_id: int,
     service: TaskService = Depends(get_task_service),
     scheduler_service: SchedulerService = Depends(get_scheduler_service),
+    process_service: ProcessService = Depends(get_process_service),
 ):
     """获取单个任务"""
     task = await service.get_task(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="任务未找到")
-    return serialize_task(task, scheduler_service)
+    return serialize_task(task, scheduler_service, process_service.task_run_status_service)
 @router.post("/", response_model=dict)
 async def create_task(
     task_create: TaskCreate,
     service: TaskService = Depends(get_task_service),
     scheduler_service: SchedulerService = Depends(get_scheduler_service),
+    process_service: ProcessService = Depends(get_process_service),
 ):
     """创建新任务"""
     task = await service.create_task(task_create)
     await _reload_scheduler_if_needed(service, scheduler_service)
-    return {"message": "任务创建成功", "task": serialize_task(task, scheduler_service)}
+    return {
+        "message": "任务创建成功",
+        "task": serialize_task(task, scheduler_service, process_service.task_run_status_service),
+    }
 @router.post("/generate", response_model=dict)
 async def generate_task(
     req: TaskGenerateRequest,
     service: TaskService = Depends(get_task_service),
     scheduler_service: SchedulerService = Depends(get_scheduler_service),
+    process_service: ProcessService = Depends(get_process_service),
     generation_service: TaskGenerationService = Depends(get_task_generation_service),
 ):
     """创建任务。AI模式会生成分析标准，关键词模式直接保存规则。"""
@@ -117,7 +124,10 @@ async def generate_task(
 
         task = await service.create_task(build_task_create(req, ""))
         await _reload_scheduler_if_needed(service, scheduler_service)
-        return {"message": "任务创建成功。", "task": serialize_task(task, scheduler_service)}
+        return {
+            "message": "任务创建成功。",
+            "task": serialize_task(task, scheduler_service, process_service.task_run_status_service),
+        }
 
     except HTTPException:
         raise
@@ -143,6 +153,7 @@ async def update_task(
     task_update: TaskUpdate,
     service: TaskService = Depends(get_task_service),
     scheduler_service: SchedulerService = Depends(get_scheduler_service),
+    process_service: ProcessService = Depends(get_process_service),
 ):
     """更新任务"""
     try:
@@ -208,7 +219,10 @@ async def update_task(
                 raise HTTPException(status_code=500, detail=error_msg)
         task = await service.update_task(task_id, task_update)
         await _reload_scheduler_if_needed(service, scheduler_service)
-        return {"message": "任务更新成功", "task": serialize_task(task, scheduler_service)}
+        return {
+            "message": "任务更新成功",
+            "task": serialize_task(task, scheduler_service, process_service.task_run_status_service),
+        }
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 @router.delete("/{task_id}", response_model=dict)
@@ -254,6 +268,7 @@ async def start_task(
     task_id: int,
     task_service: TaskService = Depends(get_task_service),
     process_service: ProcessService = Depends(get_process_service),
+    scheduler_service: SchedulerService = Depends(get_scheduler_service),
 ):
     """启动单个任务"""
     task = await task_service.get_task(task_id)
@@ -266,16 +281,33 @@ async def start_task(
     success = await process_service.start_task(task_id, task.task_name)
     if not success:
         raise HTTPException(status_code=500, detail="启动任务失败")
-    return {"message": f"任务 '{task.task_name}' 已启动"}
+    refreshed_task = await task_service.get_task(task_id) or task
+    return {
+        "message": f"任务 '{task.task_name}' 已启动",
+        "task": serialize_task(
+            refreshed_task,
+            scheduler_service,
+            process_service.task_run_status_service,
+        ),
+    }
 @router.post("/stop/{task_id}", response_model=dict)
 async def stop_task(
     task_id: int,
     task_service: TaskService = Depends(get_task_service),
     process_service: ProcessService = Depends(get_process_service),
+    scheduler_service: SchedulerService = Depends(get_scheduler_service),
 ):
     """停止单个任务"""
     task = await task_service.get_task(task_id)
     if not task:
         raise HTTPException(status_code=404, detail="任务未找到")
     await process_service.stop_task(task_id)
-    return {"message": f"任务ID {task_id} 已发送停止信号"}
+    refreshed_task = await task_service.get_task(task_id) or task
+    return {
+        "message": f"任务ID {task_id} 已发送停止信号",
+        "task": serialize_task(
+            refreshed_task,
+            scheduler_service,
+            process_service.task_run_status_service,
+        ),
+    }
