@@ -182,6 +182,9 @@ const zhCN = {
       totalItems: '共 {count} 件商品',
       itemCount: '{count} 件',
       recommended: '{count} 推荐',
+      showAll: '展开全部',
+      showLess: '收起',
+      moreHidden: '还有 {count} 个卖家未显示',
     },
     grid: {
       loading: '正在加载结果...',
