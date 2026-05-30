@@ -10,6 +10,7 @@ from urllib.parse import quote
 
 from src.services.price_history_service import build_price_history_insights
 from src.services.result_export_service import build_results_csv
+from src.services.seller_aggregation_service import aggregate_sellers
 from src.services.result_file_service import (
     enrich_records_with_price_insight,
     validate_result_filename,
@@ -278,3 +279,65 @@ async def put_result_blacklist_rules(filename: str, body: BlacklistRulesRequest)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return {"message": "黑名单规则已更新", "keywords": keywords}
+
+
+@router.get("/{filename}/sellers")
+async def get_seller_aggregation(
+    filename: str,
+    recommended_only: bool = Query(False),
+    ai_recommended_only: bool = Query(False),
+    keyword_recommended_only: bool = Query(False),
+    include_hidden: bool = Query(False),
+    yhb_only: bool = Query(False),
+    free_shipping_only: bool = Query(False),
+    personal_seller_only: bool = Query(False),
+    processed_only: bool = Query(False),
+    contacted_only: bool = Query(False),
+    hide_processed: bool = Query(False),
+    sort: str | None = Query(None),
+    sort_by: str = Query("crawl_time"),
+    sort_order: str = Query("desc"),
+):
+    """
+    按卖家维度聚合当前筛选结果。
+
+    返回每个卖家的商品数、价格范围、最近发现时间、推荐商品数、个人卖家画像摘要。
+    支持与结果列表相同的筛选参数。
+    """
+    if ai_recommended_only and keyword_recommended_only:
+        raise HTTPException(status_code=400, detail="AI推荐筛选与关键词推荐筛选不能同时开启。")
+    if recommended_only and not ai_recommended_only and not keyword_recommended_only:
+        ai_recommended_only = True
+    sort_by, sort_order = normalize_result_sort(sort=sort, sort_by=sort_by, sort_order=sort_order)
+
+    try:
+        validate_result_filename(filename)
+        records = await load_all_result_records(
+            filename,
+            ai_recommended_only=ai_recommended_only,
+            keyword_recommended_only=keyword_recommended_only,
+            sort_by=sort_by,
+            sort_order=sort_order,
+            include_hidden=include_hidden,
+            yhb_only=yhb_only,
+            free_shipping_only=free_shipping_only,
+            personal_seller_only=personal_seller_only,
+            processed_only=processed_only,
+            contacted_only=contacted_only,
+            hide_processed=hide_processed,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"读取结果文件时出错: {exc}")
+
+    if not records and not await result_file_exists(filename):
+        raise HTTPException(status_code=404, detail="结果文件未找到")
+
+    sellers = aggregate_sellers(records)
+    return {
+        "total_sellers": len(sellers),
+        "total_items": len(records),
+        "sellers": sellers,
+    }
+
