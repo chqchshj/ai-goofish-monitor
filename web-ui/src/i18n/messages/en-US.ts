@@ -177,6 +177,12 @@ const enUS = {
       blacklistRulesPlaceholder: 'Example: intel\npro 13\nre:\\b(pm|pro[\\s-]?max)\\b',
       confirmBlacklistSave: 'Save Rules',
     },
+    sellers: {
+      title: '{count} Sellers',
+      totalItems: '{count} items total',
+      itemCount: '{count} items',
+      recommended: '{count} rec',
+    },
     grid: {
       loading: 'Loading results...',
       empty: 'No items matched the current filters.',

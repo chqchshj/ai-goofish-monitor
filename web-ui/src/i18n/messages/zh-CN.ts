@@ -177,6 +177,12 @@ const zhCN = {
       blacklistRulesPlaceholder: '示例：intel\npro 13\nre:\\b(pm|pro[\\s-]?max)\\b',
       confirmBlacklistSave: '保存规则',
     },
+    sellers: {
+      title: '{count} 个卖家',
+      totalItems: '共 {count} 件商品',
+      itemCount: '{count} 件',
+      recommended: '{count} 推荐',
+    },
     grid: {
       loading: '正在加载结果...',
       empty: '没有找到符合条件的商品记录。',

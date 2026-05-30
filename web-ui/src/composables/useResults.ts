@@ -3,6 +3,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import type { ResultInsights, ResultItem } from '@/types/result.d.ts'
 import * as resultsApi from '@/api/results'
+import type { GetSellerAggregationResponse } from '@/api/results'
 import { useWebSocket } from '@/composables/useWebSocket'
 import * as tasksApi from '@/api/tasks'
 import {
@@ -22,6 +23,7 @@ export function useResults() {
   const selectedFile = ref<string | null>(null)
   const results = ref<ResultItem[]>([])
   const insights = ref<ResultInsights | null>(null)
+  const sellerAggregation = ref<GetSellerAggregationResponse | null>(null)
   const totalItems = ref(0)
   const page = ref(1)
   const limit = ref(100)
@@ -132,6 +134,20 @@ export function useResults() {
     } catch (e) {
       if (e instanceof Error) error.value = e
       insights.value = null
+    }
+  }
+
+  async function fetchSellerAggregation() {
+    if (!selectedFile.value) {
+      sellerAggregation.value = null
+      return
+    }
+
+    try {
+      sellerAggregation.value = await resultsApi.getSellerAggregation(selectedFile.value, { ...filters })
+    } catch (e) {
+      if (e instanceof Error) error.value = e
+      sellerAggregation.value = null
     }
   }
 
@@ -278,6 +294,7 @@ export function useResults() {
   watch([selectedFile, filters], fetchResults, { deep: true })
   watch(selectedFile, () => {
     fetchInsights()
+    fetchSellerAggregation()
     fetchBlacklistRules()
   })
   watch(selectedFile, (value) => {
@@ -349,12 +366,14 @@ export function useResults() {
     selectedFile,
     results,
     insights,
+    sellerAggregation,
     totalItems,
     filters,
     isLoading,
     error,
     fetchFiles, // Expose to allow manual refresh
     refreshResults,
+    fetchSellerAggregation,
     exportSelectedResults,
     deleteSelectedFile,
     toggleItemBlock,
