@@ -27,6 +27,7 @@ interface Props {
   includeHidden: boolean
   yhbOnly: boolean
   freeShippingOnly: boolean
+  personalSellerOnly: boolean
   sortBy: 'crawl_time' | 'publish_time' | 'price' | 'keyword_hit_count'
   sortOrder: 'asc' | 'desc'
   isLoading: boolean
@@ -72,6 +73,7 @@ const emit = defineEmits<{
   (e: 'update:includeHidden', value: boolean): void
   (e: 'update:yhbOnly', value: boolean): void
   (e: 'update:freeShippingOnly', value: boolean): void
+  (e: 'update:personalSellerOnly', value: boolean): void
   (e: 'update:sortBy', value: 'crawl_time' | 'publish_time' | 'price' | 'keyword_hit_count'): void
   (e: 'update:sortOrder', value: 'asc' | 'desc'): void
   (e: 'refresh'): void
@@ -197,6 +199,15 @@ function handleToggleKeywordRecommended(value: boolean) {
             @update:modelValue="(value) => emit('update:freeShippingOnly', value === true)"
           />
           <Label for="free-shipping-only" class="cursor-pointer">{{ t('results.filters.freeShippingOnly') }}</Label>
+        </div>
+
+        <div class="flex items-center space-x-2">
+          <Checkbox
+            id="personal-seller-only"
+            :model-value="props.personalSellerOnly"
+            @update:modelValue="(value) => emit('update:personalSellerOnly', value === true)"
+          />
+          <Label for="personal-seller-only" class="cursor-pointer">{{ t('results.filters.personalSellerOnly') }}</Label>
         </div>
       </div>
 

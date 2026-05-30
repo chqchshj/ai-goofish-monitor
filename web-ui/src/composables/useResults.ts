@@ -37,6 +37,7 @@ export function useResults() {
       include_hidden: false,
       yhb_only: false,
       free_shipping_only: false,
+      personal_seller_only: false,
       sort_by: 'crawl_time',
       sort_order: 'desc',
     }

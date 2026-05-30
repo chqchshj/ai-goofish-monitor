@@ -8,6 +8,7 @@ export interface GetResultContentParams {
   include_hidden?: boolean;
   yhb_only?: boolean;
   free_shipping_only?: boolean;
+  personal_seller_only?: boolean;
   sort_by?: 'crawl_time' | 'publish_time' | 'price' | 'keyword_hit_count';
   sort_order?: 'asc' | 'desc';
   page?: number;

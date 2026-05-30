@@ -152,6 +152,7 @@ const enUS = {
       includeHidden: 'Show hidden items',
       yhbOnly: 'YHB only',
       freeShippingOnly: 'Free shipping only',
+      personalSellerOnly: 'Personal sellers only',
       manageBlacklist: 'Blacklist Rules',
       exportCsv: 'Export CSV',
       deleteResult: 'Delete Result',

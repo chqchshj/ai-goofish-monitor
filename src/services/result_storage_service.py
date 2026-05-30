@@ -115,6 +115,65 @@ def _record_matches_attribute_filters(
     return True
 
 
+_PERSONAL_SELLER_POSITIVE_SIGNALS = (
+    "个人卖家",
+    "个人玩家",
+    "自用",
+    "升级换代",
+    "发烧友",
+    "消费者",
+    "可信的个人故事",
+)
+
+_PERSONAL_SELLER_NEGATIVE_SIGNALS = (
+    "商家",
+    "贩子",
+    "职业卖家",
+    "批量",
+    "工作室",
+    "出货",
+    "维修配件",
+    "逻辑断裂",
+)
+
+
+def _collect_ai_seller_type_text(value) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list):
+        parts: list[str] = []
+        for item in value:
+            parts.extend(_collect_ai_seller_type_text(item))
+        return parts
+    if isinstance(value, dict):
+        parts = []
+        for key, nested in value.items():
+            if key in {"status", "persona", "comment", "evidence", "analysis_details"}:
+                parts.extend(_collect_ai_seller_type_text(nested))
+            elif isinstance(nested, (dict, list)):
+                parts.extend(_collect_ai_seller_type_text(nested))
+        return parts
+    return []
+
+
+def _record_matches_personal_seller_filter(record: dict) -> bool:
+    analysis = record.get("ai_analysis", {}) or {}
+    if analysis.get("analysis_source") != "ai":
+        return False
+
+    criteria = analysis.get("criteria_analysis", {}) or {}
+    seller_type = criteria.get("seller_type")
+    if not isinstance(seller_type, dict):
+        return False
+
+    search_text = " ".join(_collect_ai_seller_type_text(seller_type))
+    if not search_text:
+        return False
+    if any(signal in search_text for signal in _PERSONAL_SELLER_NEGATIVE_SIGNALS):
+        return False
+    return any(signal in search_text for signal in _PERSONAL_SELLER_POSITIVE_SIGNALS)
+
+
 def _sort_expression(sort_by: str, sort_order: str) -> str:
     column = SORT_COLUMN_MAP.get(sort_by, SORT_COLUMN_MAP["crawl_time"])
     direction = "ASC" if sort_order == "asc" else "DESC"
@@ -171,6 +230,7 @@ def _load_filtered_records_from_conn(
     include_hidden: bool,
     yhb_only: bool,
     free_shipping_only: bool,
+    personal_seller_only: bool = False,
 ) -> list[dict]:
     where_clause, params = _build_query_conditions(
         filename=filename,
@@ -201,8 +261,8 @@ def _load_filtered_records_from_conn(
             free_shipping_only=free_shipping_only,
         ):
             continue
-        # Result records do not currently store a reliable personal-seller flag,
-        # so the result page intentionally only exposes filters backed by raw data.
+        if personal_seller_only and not _record_matches_personal_seller_filter(decorated):
+            continue
         records.append(decorated)
     return records
 
@@ -325,6 +385,7 @@ async def query_result_records(
     include_hidden: bool = False,
     yhb_only: bool = False,
     free_shipping_only: bool = False,
+    personal_seller_only: bool = False,
 ) -> tuple[int, list[dict]]:
     return await asyncio.to_thread(
         _query_result_records_sync,
@@ -338,6 +399,7 @@ async def query_result_records(
         include_hidden,
         yhb_only,
         free_shipping_only,
+        personal_seller_only,
     )
 
 
@@ -352,6 +414,7 @@ def _query_result_records_sync(
     include_hidden: bool,
     yhb_only: bool,
     free_shipping_only: bool,
+    personal_seller_only: bool,
 ) -> tuple[int, list[dict]]:
     bootstrap_sqlite_storage()
     offset = max(page - 1, 0) * limit
@@ -366,6 +429,7 @@ def _query_result_records_sync(
             include_hidden=include_hidden,
             yhb_only=yhb_only,
             free_shipping_only=free_shipping_only,
+            personal_seller_only=personal_seller_only,
         )
     total = len(records)
     return total, records[offset: offset + limit]
@@ -381,6 +445,7 @@ async def load_all_result_records(
     include_hidden: bool = False,
     yhb_only: bool = False,
     free_shipping_only: bool = False,
+    personal_seller_only: bool = False,
 ) -> list[dict]:
     return await asyncio.to_thread(
         _load_all_result_records_sync,
@@ -392,6 +457,7 @@ async def load_all_result_records(
         include_hidden,
         yhb_only,
         free_shipping_only,
+        personal_seller_only,
     )
 
 
@@ -404,6 +470,7 @@ def _load_all_result_records_sync(
     include_hidden: bool,
     yhb_only: bool,
     free_shipping_only: bool,
+    personal_seller_only: bool = False,
 ) -> list[dict]:
     bootstrap_sqlite_storage()
     with sqlite_connection() as conn:
@@ -417,6 +484,7 @@ def _load_all_result_records_sync(
             include_hidden=include_hidden,
             yhb_only=yhb_only,
             free_shipping_only=free_shipping_only,
+            personal_seller_only=personal_seller_only,
         )
 
 

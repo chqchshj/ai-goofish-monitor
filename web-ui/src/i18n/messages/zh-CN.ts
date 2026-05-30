@@ -152,6 +152,7 @@ const zhCN = {
       includeHidden: '显示已屏蔽结果',
       yhbOnly: '仅看验货宝',
       freeShippingOnly: '仅看包邮',
+      personalSellerOnly: '仅看个人卖家',
       manageBlacklist: '黑名单规则',
       exportCsv: '导出 CSV',
       deleteResult: '删除结果',

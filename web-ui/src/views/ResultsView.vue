@@ -148,6 +148,7 @@ async function handleSaveBlacklistRules() {
       v-model:includeHidden="filters.include_hidden"
       v-model:yhbOnly="filters.yhb_only"
       v-model:freeShippingOnly="filters.free_shipping_only"
+      v-model:personalSellerOnly="filters.personal_seller_only"
       v-model:sortBy="filters.sort_by"
       v-model:sortOrder="filters.sort_order"
       :is-loading="isLoading"
