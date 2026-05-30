@@ -1,15 +1,57 @@
 import { ref, reactive, watch, onMounted, computed } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import type { ResultInsights, ResultItem } from '@/types/result.d.ts'
 import * as resultsApi from '@/api/results'
-import type { GetResultContentParams } from '@/api/results'
+import type { GetResultContentParams, ResultSort } from '@/api/results'
 import { useWebSocket } from '@/composables/useWebSocket'
 import * as tasksApi from '@/api/tasks'
+
+type ResultFilters = Required<Pick<
+  GetResultContentParams,
+  | 'ai_recommended_only'
+  | 'keyword_recommended_only'
+  | 'include_hidden'
+  | 'yhb_only'
+  | 'free_shipping_only'
+  | 'personal_seller_only'
+  | 'sort'
+>>
+
+const DEFAULT_FILTERS: ResultFilters = {
+  ai_recommended_only: false,
+  keyword_recommended_only: false,
+  include_hidden: false,
+  yhb_only: false,
+  free_shipping_only: false,
+  personal_seller_only: false,
+  sort: 'discovered_desc',
+}
+
+const BOOLEAN_QUERY_KEYS = [
+  'ai_recommended_only',
+  'keyword_recommended_only',
+  'include_hidden',
+  'yhb_only',
+  'free_shipping_only',
+  'personal_seller_only',
+] as const
+
+const VALID_SORTS: ResultSort[] = [
+  'discovered_desc',
+  'discovered_asc',
+  'publish_desc',
+  'publish_asc',
+  'price_desc',
+  'price_asc',
+  'keyword_hit_desc',
+  'keyword_hit_asc',
+]
 
 export function useResults() {
   const { t } = useI18n()
   const route = useRoute()
+  const router = useRouter()
   // State
   const files = ref<string[]>([])
   const selectedFile = ref<string | null>(null)
@@ -26,29 +68,47 @@ export function useResults() {
   const isSavingBlacklist = ref(false)
   const readyDelayMs = 200
   let readyTimer: ReturnType<typeof setTimeout> | null = null
-  
-  const STORAGE_KEY_FILTERS = 'resultFilters'
+  let isApplyingRouteQuery = false
 
-  function loadPersistedFilters(): Required<Omit<GetResultContentParams, 'page' | 'limit'>> {
-    const defaults: Required<Omit<GetResultContentParams, 'page' | 'limit'>> = {
-      recommended_only: false,
-      ai_recommended_only: false,
-      keyword_recommended_only: false,
-      include_hidden: false,
-      yhb_only: false,
-      free_shipping_only: false,
-      personal_seller_only: false,
-      sort_by: 'crawl_time',
-      sort_order: 'desc',
-    }
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY_FILTERS)
-      if (saved) return { ...defaults, ...JSON.parse(saved) }
-    } catch { /* ignore */ }
-    return defaults
+  function getQueryValue(value: unknown): string | undefined {
+    if (Array.isArray(value)) return typeof value[0] === 'string' ? value[0] : undefined
+    return typeof value === 'string' ? value : undefined
   }
 
-  const filters = reactive<Required<Omit<GetResultContentParams, 'page' | 'limit'>>>(loadPersistedFilters())
+  function parseBooleanQuery(value: unknown): boolean {
+    const queryValue = getQueryValue(value)
+    return queryValue === 'true' || queryValue === '1'
+  }
+
+  function parseSortQuery(value: unknown): ResultSort {
+    const queryValue = getQueryValue(value)
+    return VALID_SORTS.includes(queryValue as ResultSort)
+      ? queryValue as ResultSort
+      : DEFAULT_FILTERS.sort
+  }
+
+  function parseFiltersFromQuery(): ResultFilters {
+    return {
+      ...DEFAULT_FILTERS,
+      ai_recommended_only: parseBooleanQuery(route.query.ai_recommended_only),
+      keyword_recommended_only: parseBooleanQuery(route.query.keyword_recommended_only),
+      include_hidden: parseBooleanQuery(route.query.include_hidden),
+      yhb_only: parseBooleanQuery(route.query.yhb_only),
+      free_shipping_only: parseBooleanQuery(route.query.free_shipping_only),
+      personal_seller_only: parseBooleanQuery(route.query.personal_seller_only),
+      sort: parseSortQuery(route.query.sort),
+    }
+  }
+
+  function applyQueryFilters() {
+    const nextFilters = parseFiltersFromQuery()
+    BOOLEAN_QUERY_KEYS.forEach((key) => {
+      filters[key] = nextFilters[key]
+    })
+    filters.sort = nextFilters.sort
+  }
+
+  const filters = reactive<ResultFilters>(parseFiltersFromQuery())
 
   const isLoading = ref(false)
   const error = ref<Error | null>(null)
@@ -73,10 +133,18 @@ export function useResults() {
         return
       }
 
-      const lastSelected = localStorage.getItem('lastSelectedResultFile')
-      if (lastSelected && fileList.includes(lastSelected)) {
-        selectedFile.value = lastSelected
+      const routeFile = getQueryValue(route.query.file)
+      if (routeFile && fileList.includes(routeFile)) {
+        selectedFile.value = routeFile
         return
+      }
+
+      if (!routeFile) {
+        const lastSelected = localStorage.getItem('lastSelectedResultFile')
+        if (lastSelected && fileList.includes(lastSelected)) {
+          selectedFile.value = lastSelected
+          return
+        }
       }
 
       selectedFile.value = fileList[0] || null
@@ -254,9 +322,6 @@ export function useResults() {
   }
 
   // Watchers
-  watch(filters, (val) => {
-    localStorage.setItem(STORAGE_KEY_FILTERS, JSON.stringify(val))
-  }, { deep: true })
   watch([selectedFile, filters], fetchResults, { deep: true })
   watch(selectedFile, () => {
     fetchInsights()
@@ -265,11 +330,52 @@ export function useResults() {
   watch(selectedFile, (value) => {
     if (value) localStorage.setItem('lastSelectedResultFile', value)
   })
+
+  watch([selectedFile, filters], () => {
+    if (isApplyingRouteQuery) return
+    const query: Record<string, string> = {}
+    if (selectedFile.value) {
+      query.file = selectedFile.value
+    }
+    BOOLEAN_QUERY_KEYS.forEach((key) => {
+      if (filters[key]) {
+        query[key] = 'true'
+      }
+    })
+    if (filters.sort !== DEFAULT_FILTERS.sort) {
+      query.sort = filters.sort
+    }
+    router.replace({ query })
+  }, { deep: true })
+
   watch(
-    [() => route.query.file, files],
-    ([routeFile, currentFiles]) => {
-      if (typeof routeFile !== 'string') return
-      if (currentFiles.includes(routeFile)) {
+    () => route.query,
+    () => {
+      isApplyingRouteQuery = true
+      try {
+        applyQueryFilters()
+        const routeFile = getQueryValue(route.query.file)
+        if (routeFile && files.value.includes(routeFile)) {
+          selectedFile.value = routeFile
+        } else if (!routeFile && !selectedFile.value && files.value.length > 0) {
+          const lastSelected = localStorage.getItem('lastSelectedResultFile')
+          selectedFile.value =
+            lastSelected && files.value.includes(lastSelected)
+              ? lastSelected
+              : files.value[0] || null
+        }
+      } finally {
+        isApplyingRouteQuery = false
+      }
+    },
+    { immediate: true }
+  )
+
+  watch(
+    files,
+    (currentFiles) => {
+      const routeFile = getQueryValue(route.query.file)
+      if (routeFile && currentFiles.includes(routeFile)) {
         selectedFile.value = routeFile
       }
     },

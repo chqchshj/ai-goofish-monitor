@@ -25,6 +25,17 @@ SORT_COLUMN_MAP = {
     "keyword_hit_count": "keyword_hit_count",
 }
 
+COMBINED_SORT_MAP = {
+    "discovered_desc": ("crawl_time", "desc"),
+    "discovered_asc": ("crawl_time", "asc"),
+    "publish_desc": ("publish_time", "desc"),
+    "publish_asc": ("publish_time", "asc"),
+    "price_desc": ("price", "desc"),
+    "price_asc": ("price", "asc"),
+    "keyword_hit_desc": ("keyword_hit_count", "desc"),
+    "keyword_hit_asc": ("keyword_hit_count", "asc"),
+}
+
 
 def _get_link_unique_key(link: str) -> str:
     return link.split("&", 1)[0]
@@ -174,9 +185,26 @@ def _record_matches_personal_seller_filter(record: dict) -> bool:
     return any(signal in search_text for signal in _PERSONAL_SELLER_POSITIVE_SIGNALS)
 
 
-def _sort_expression(sort_by: str, sort_order: str) -> str:
-    column = SORT_COLUMN_MAP.get(sort_by, SORT_COLUMN_MAP["crawl_time"])
-    direction = "ASC" if sort_order == "asc" else "DESC"
+def normalize_result_sort(
+    *,
+    sort: str | None = None,
+    sort_by: str | None = None,
+    sort_order: str | None = None,
+) -> tuple[str, str]:
+    if sort in COMBINED_SORT_MAP:
+        return COMBINED_SORT_MAP[sort]
+    if sort_by in SORT_COLUMN_MAP:
+        return sort_by, "asc" if sort_order == "asc" else "desc"
+    return "crawl_time", "desc"
+
+
+def _sort_expression(sort_by: str | None, sort_order: str | None) -> str:
+    normalized_sort_by, normalized_sort_order = normalize_result_sort(
+        sort_by=sort_by,
+        sort_order=sort_order,
+    )
+    column = SORT_COLUMN_MAP[normalized_sort_by]
+    direction = "ASC" if normalized_sort_order == "asc" else "DESC"
     return f"(CASE WHEN status = 'active' THEN 0 ELSE 1 END), {column} {direction}, id {direction}"
 
 
