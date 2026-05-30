@@ -18,6 +18,7 @@ delivered by the Codex/Opus47 worker lane and reviewed here:
 | P4-2  | Notification content enrichment (region, tags, badges, seller persona) | d3ab828 |
 | docs  | Stabilization & observability plan update | cd5966c |
 | P4-1  | Notification threshold + dedup seam (filter + policy + InMemoryDedupStore) | 4d0fdb7 + 0514187 + merge a705edb |
+| P4-3  | Notification per-seller throttle seam | merge (kb/p4-3-notification-seller-throttle) |
 
 ---
 
@@ -84,10 +85,11 @@ Frontend:
   - `InMemoryDedupStore` (TTL-based, no DB writes)
   - `NotificationPolicy` dataclass
   - `evaluate_notification()` decision function
-- `src/infrastructure/config/settings.py`: 3 new env-only fields:
+- `src/infrastructure/config/settings.py`: 4 new env-only fields (P4-1 三项 + P4-3 一项):
   - `NOTIFICATION_MIN_SCORE` (default: unset = no threshold)
   - `NOTIFICATION_MIN_LEVEL` (default: unset = no threshold)
-  - `NOTIFICATION_DEDUP_WINDOW_SECONDS` (default: unset = no dedup)
+  - `NOTIFICATION_DEDUP_WINDOW_SECONDS` (default: 0 = no dedup)
+  - `NOTIFICATION_SELLER_THROTTLE_WINDOW_SECONDS` (default: 0 = no seller throttle, P4-3)
   - Intentionally NOT in `NOTIFICATION_FIELD_MAP` — not exposed via `/settings/notification` UI
 - `src/services/result_pipeline_service.py`: accepts optional `policy`/`dedup_store`;
   `from_settings()` factory auto-derives from env; `ResultPipelineOutcome` gains
@@ -135,8 +137,8 @@ Test breakdown:
 - [ ] On NAS: `docker compose pull && docker compose up -d` (or rebuild from fork)
 - [ ] Verify migration ran: check `result_items` has `is_processed`/`is_contacted` columns
 - [ ] Verify new flag buttons appear in ResultCard footer
-- [ ] Optional: set `NOTIFICATION_MIN_SCORE` / `NOTIFICATION_DEDUP_WINDOW_SECONDS` in `.env`
-      to activate P4-1 threshold/dedup (safe to leave unset)
+- [ ] Optional: set `NOTIFICATION_MIN_SCORE` / `NOTIFICATION_DEDUP_WINDOW_SECONDS` / `NOTIFICATION_SELLER_THROTTLE_WINDOW_SECONDS` in `.env`
+      to activate P4-1 threshold/dedup or P4-3 per-seller throttle (safe to leave unset; see `docs/runbooks/notification-throttle-ops.md` for staged rollout and rollback)
 - [ ] No rollback risk on schema: all `ALTER TABLE` are additive with DEFAULT values
 
 ---

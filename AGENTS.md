@@ -54,3 +54,4 @@
 - 默认行为：未配置任何字段时，`ResultPipelineService` 行为与 P3 时期完全一致——`is_recommended=True` 即通知，否则不通知。
 - 仅作用范围：影响 AI 推荐链路（`ResultPipelineService._notify_if_recommended`）；任务暂停/失败告警（scraper.py / process_service.py）继续走原通道，不受降噪影响。
 - 切换平滑：`evaluate_notification` 在 inert 策略下仍会 `dedup_store.mark` 和 `seller_throttle_store.mark`，避免运维启用窗口的瞬间把历史 key 全部重发。
+- 运维启用顺序、风险与回滚步骤见 `docs/runbooks/notification-throttle-ops.md`（不在本契约范围内，文档单独维护）。
