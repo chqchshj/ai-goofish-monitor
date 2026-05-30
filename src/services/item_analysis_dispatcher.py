@@ -57,7 +57,13 @@ class ItemAnalysisDispatcher:
         if result_pipeline is None:
             if notifier is None or saver is None:
                 raise ValueError("notifier and saver are required without result_pipeline")
-            result_pipeline = ResultPipelineService(saver=saver, notifier=notifier)
+            # 从 .env 读取通知降噪策略 (P4-1 seam)。
+            # 未配置 NOTIFICATION_MIN_SCORE / NOTIFICATION_MIN_LEVEL /
+            # NOTIFICATION_DEDUP_WINDOW_SECONDS 时, from_settings 返回的实例
+            # 与原来 ``ResultPipelineService(saver=..., notifier=...)`` 行为一致。
+            result_pipeline = ResultPipelineService.from_settings(
+                saver=saver, notifier=notifier
+            )
         self._result_pipeline = result_pipeline
         self._tasks: set[asyncio.Task] = set()
         self.completed_count = 0
