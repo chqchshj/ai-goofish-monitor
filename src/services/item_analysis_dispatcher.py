@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Awaitable, Callable, Optional
 
 from src.keyword_rule_engine import build_search_text, evaluate_keyword_rules
+from src.services.result_pipeline_service import ResultPipelineService
 
 
 SellerLoader = Callable[[str], Awaitable[dict]]
@@ -44,16 +45,20 @@ class ItemAnalysisDispatcher:
         seller_loader: SellerLoader,
         image_downloader: ImageDownloader,
         ai_analyzer: AIAnalyzer,
-        notifier: Notifier,
-        saver: Saver,
+        notifier: Optional[Notifier] = None,
+        saver: Optional[Saver] = None,
+        result_pipeline: Optional[ResultPipelineService] = None,
     ) -> None:
         self._semaphore = asyncio.Semaphore(max(1, concurrency))
         self._skip_ai_analysis = skip_ai_analysis
         self._seller_loader = seller_loader
         self._image_downloader = image_downloader
         self._ai_analyzer = ai_analyzer
-        self._notifier = notifier
-        self._saver = saver
+        if result_pipeline is None:
+            if notifier is None or saver is None:
+                raise ValueError("notifier and saver are required without result_pipeline")
+            result_pipeline = ResultPipelineService(saver=saver, notifier=notifier)
+        self._result_pipeline = result_pipeline
         self._tasks: set[asyncio.Task] = set()
         self.completed_count = 0
 
@@ -72,16 +77,14 @@ class ItemAnalysisDispatcher:
 
     async def _process_job(self, job: ItemAnalysisJob) -> None:
         record = copy.deepcopy(job.final_record)
-        item_data = record.get("商品信息", {}) or {}
         record["卖家信息"] = await self._load_seller_info(job)
         record["ai_analysis"] = await self._build_analysis_result(job, record)
-        if await self._saver(record, job.keyword):
-            self.completed_count += 1
-        await self._notify_if_recommended(
-            item_data,
-            record["ai_analysis"],
-            job.notification_targets,
+        outcome = await self._result_pipeline.persist_and_notify(
+            record,
+            job.keyword,
+            notification_targets=job.notification_targets,
         )
+        self.completed_count += outcome.save_count_increment
 
     async def _load_seller_info(self, job: ItemAnalysisJob) -> dict:
         seller_info = {}
@@ -168,20 +171,3 @@ class ItemAnalysisDispatcher:
                     os.remove(img_path)
             except Exception as exc:
                 print(f"   [图片] 删除图片文件时出错: {exc}")
-
-    async def _notify_if_recommended(
-        self,
-        item_data: dict,
-        analysis_result: dict,
-        notification_targets: Optional[list[dict]],
-    ) -> None:
-        if not analysis_result.get("is_recommended"):
-            return
-        try:
-            await self._notifier(
-                item_data,
-                analysis_result.get("reason", "无"),
-                notification_targets,
-            )
-        except Exception as exc:
-            print(f"   [通知] 发送推荐通知失败: {exc}")
