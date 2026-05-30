@@ -21,6 +21,7 @@ export function useResults() {
   const files = ref<string[]>([])
   const selectedFile = ref<string | null>(null)
   const results = ref<ResultItem[]>([])
+  const selectedItemIds = ref<Set<string>>(new Set())
   const insights = ref<ResultInsights | null>(null)
   const totalItems = ref(0)
   const page = ref(1)
@@ -59,6 +60,41 @@ export function useResults() {
 
   function getKeywordFromFilename(filename: string) {
     return filename.replace(/_full_data\.jsonl$/i, '').toLowerCase()
+  }
+
+  function getItemId(item: ResultItem) {
+    return item.商品信息?.商品ID || ''
+  }
+
+  function clearSelection() {
+    selectedItemIds.value = new Set()
+  }
+
+  function toggleItemSelection(item: ResultItem, selected?: boolean) {
+    const itemId = getItemId(item)
+    if (!itemId) return
+    const next = new Set(selectedItemIds.value)
+    const shouldSelect = selected ?? !next.has(itemId)
+    if (shouldSelect) {
+      next.add(itemId)
+    } else {
+      next.delete(itemId)
+    }
+    selectedItemIds.value = next
+  }
+
+  function toggleCurrentPageSelection(selected?: boolean) {
+    const next = new Set(selectedItemIds.value)
+    const itemIds = results.value.map(getItemId).filter(Boolean)
+    const shouldSelect = selected ?? !itemIds.every((itemId) => next.has(itemId))
+    itemIds.forEach((itemId) => {
+      if (shouldSelect) {
+        next.add(itemId)
+      } else {
+        next.delete(itemId)
+      }
+    })
+    selectedItemIds.value = next
   }
 
   // Methods
@@ -112,6 +148,10 @@ export function useResults() {
       })
       results.value = data.items
       totalItems.value = data.total_items
+      const visibleIds = new Set(data.items.map(getItemId).filter(Boolean))
+      selectedItemIds.value = new Set(
+        [...selectedItemIds.value].filter((itemId) => visibleIds.has(itemId))
+      )
     } catch (e) {
       if (e instanceof Error) error.value = e
       results.value = []
@@ -257,6 +297,27 @@ export function useResults() {
     }
   }
 
+  async function batchUpdateSelectedItems(payload: Omit<resultsApi.BatchUpdateItemsPayload, 'item_ids'>) {
+    if (!selectedFile.value || selectedItemIds.value.size === 0) return null
+    isLoading.value = true
+    error.value = null
+    try {
+      const data = await resultsApi.updateItemsBatch(selectedFile.value, {
+        item_ids: [...selectedItemIds.value],
+        ...payload,
+      })
+      clearSelection()
+      await fetchResults()
+      await fetchInsights()
+      return data
+    } catch (e) {
+      if (e instanceof Error) error.value = e
+      throw e
+    } finally {
+      isLoading.value = false
+    }
+  }
+
   async function saveBlacklistRules(keywords: string[]) {
     if (!selectedFile.value) return
     isSavingBlacklist.value = true
@@ -274,8 +335,21 @@ export function useResults() {
     }
   }
 
+  const currentPageItemIds = computed(() => results.value.map(getItemId).filter(Boolean))
+  const selectedCount = computed(() => selectedItemIds.value.size)
+  const isAllCurrentPageSelected = computed(() => (
+    currentPageItemIds.value.length > 0
+    && currentPageItemIds.value.every((itemId) => selectedItemIds.value.has(itemId))
+  ))
+  const isSomeCurrentPageSelected = computed(() => (
+    currentPageItemIds.value.some((itemId) => selectedItemIds.value.has(itemId))
+  ))
+
   // Watchers
-  watch([selectedFile, filters], fetchResults, { deep: true })
+  watch([selectedFile, filters], () => {
+    clearSelection()
+    fetchResults()
+  }, { deep: true })
   watch(selectedFile, () => {
     fetchInsights()
     fetchBlacklistRules()
@@ -348,6 +422,10 @@ export function useResults() {
     files,
     selectedFile,
     results,
+    selectedItemIds,
+    selectedCount,
+    isAllCurrentPageSelected,
+    isSomeCurrentPageSelected,
     insights,
     totalItems,
     filters,
@@ -356,6 +434,10 @@ export function useResults() {
     fetchFiles, // Expose to allow manual refresh
     refreshResults,
     exportSelectedResults,
+    clearSelection,
+    toggleItemSelection,
+    toggleCurrentPageSelection,
+    batchUpdateSelectedItems,
     deleteSelectedFile,
     toggleItemBlock,
     toggleItemFlag,

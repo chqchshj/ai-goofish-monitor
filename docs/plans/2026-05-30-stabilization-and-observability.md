@@ -153,6 +153,8 @@ cd /root/projects/xianyu-tools
 - `lastSelectedResultFile` is only a fallback when the URL has no `file` query parameter.
 - User-state flags are stored separately from visibility `status`: `_is_processed` and `_is_contacted` are boolean markers on result items, while `status` continues to represent active/hidden/expired visibility.
 - `processed_only`, `contacted_only`, and `hide_processed` are URL/API filters and are also honored by CSV export.
+- P3-3 batch operations: `PATCH /api/results/{filename}/items/batch` accepts `item_ids`, `status` (active/hidden), `is_processed`, `is_contacted`; returns `requested_count` and `updated_count`. The batch endpoint reuses the same `_build_item_update_sets` helper as the single-item endpoints.
+- Frontend batch UX: each result card has a checkbox; select-all/clear for the current page; toolbar with mark-processed, mark-contacted, batch-hide, batch-unhide, clear-selection, and export-current-filter.
 
 **Verification:**
 ```bash

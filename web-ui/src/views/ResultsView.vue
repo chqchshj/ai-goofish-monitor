@@ -23,6 +23,10 @@ const {
   files,
   selectedFile,
   results,
+  selectedItemIds,
+  selectedCount,
+  isAllCurrentPageSelected,
+  isSomeCurrentPageSelected,
   insights,
   filters,
   isLoading,
@@ -30,6 +34,10 @@ const {
   refreshResults,
   exportSelectedResults,
   deleteSelectedFile,
+  clearSelection,
+  toggleItemSelection,
+  toggleCurrentPageSelection,
+  batchUpdateSelectedItems,
   toggleItemBlock,
   toggleItemFlag,
   blacklistKeywords,
@@ -88,6 +96,30 @@ function handleExportResults() {
     return
   }
   exportSelectedResults()
+}
+
+function handleToggleCurrentPageSelection(event: Event) {
+  toggleCurrentPageSelection((event.target as HTMLInputElement).checked)
+}
+
+async function handleBatchAction(
+  payload: { status?: 'active' | 'hidden'; is_processed?: boolean; is_contacted?: boolean },
+  successKey: string,
+) {
+  try {
+    const result = await batchUpdateSelectedItems(payload)
+    if (result) {
+      toast({
+        title: t(successKey, { count: result.updated_count }),
+      })
+    }
+  } catch (e) {
+    toast({
+      title: t('results.batch.failed'),
+      description: (e as Error).message,
+      variant: 'destructive',
+    })
+  }
 }
 
 async function handleDeleteResults() {
@@ -163,7 +195,52 @@ async function handleSaveBlacklistRules() {
 
     <ResultsInsightsPanel :insights="insights" :selected-task-label="selectedTaskLabel" />
 
-    <ResultsGrid :results="results" :is-loading="isLoading" @toggle-block="toggleItemBlock" @toggle-flag="toggleItemFlag" />
+    <div
+      v-if="results.length > 0"
+      class="app-surface mb-4 flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between"
+    >
+      <label class="flex items-center gap-2 text-sm font-medium text-slate-700">
+        <input
+          type="checkbox"
+          class="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
+          :checked="isAllCurrentPageSelected"
+          :aria-checked="isSomeCurrentPageSelected && !isAllCurrentPageSelected ? 'mixed' : isAllCurrentPageSelected"
+          @change="handleToggleCurrentPageSelection"
+        />
+        <span>{{ t('results.batch.selectCurrentPage') }}</span>
+        <span class="text-xs text-slate-500">{{ t('results.batch.selectedCount', { count: selectedCount }) }}</span>
+      </label>
+
+      <div class="flex flex-wrap gap-2">
+        <Button size="sm" variant="outline" :disabled="selectedCount === 0 || isLoading" @click="handleBatchAction({ is_processed: true }, 'results.batch.markProcessedDone')">
+          {{ t('results.batch.markProcessed') }}
+        </Button>
+        <Button size="sm" variant="outline" :disabled="selectedCount === 0 || isLoading" @click="handleBatchAction({ is_contacted: true }, 'results.batch.markContactedDone')">
+          {{ t('results.batch.markContacted') }}
+        </Button>
+        <Button size="sm" variant="outline" :disabled="selectedCount === 0 || isLoading" @click="handleBatchAction({ status: 'hidden' }, 'results.batch.hideDone')">
+          {{ t('results.batch.hide') }}
+        </Button>
+        <Button size="sm" variant="outline" :disabled="selectedCount === 0 || isLoading" @click="handleBatchAction({ status: 'active' }, 'results.batch.restoreDone')">
+          {{ t('results.batch.restore') }}
+        </Button>
+        <Button size="sm" variant="outline" :disabled="selectedCount === 0" @click="clearSelection">
+          {{ t('results.batch.clearSelection') }}
+        </Button>
+        <Button size="sm" variant="outline" :disabled="!selectedFile" @click="handleExportResults">
+          {{ t('results.batch.exportCurrentFilter') }}
+        </Button>
+      </div>
+    </div>
+
+    <ResultsGrid
+      :results="results"
+      :is-loading="isLoading"
+      :selected-item-ids="selectedItemIds"
+      @toggle-selection="toggleItemSelection"
+      @toggle-block="toggleItemBlock"
+      @toggle-flag="toggleItemFlag"
+    />
 
     <Dialog v-model:open="isDeleteDialogOpen">
       <DialogContent class="sm:max-w-[420px]">

@@ -652,6 +652,180 @@ def test_results_blacklist_rules_hide_items_from_view_and_insights(tmp_path, mon
     assert "MacBook Pro Intel 13寸" in download_resp.text
 
 
+
+
+def test_results_batch_update_items(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    jsonl_dir = tmp_path / "jsonl"
+    jsonl_dir.mkdir(parents=True, exist_ok=True)
+    target_file = jsonl_dir / "batch_demo_full_data.jsonl"
+
+    records = [
+        {
+            "爬取时间": "2026-01-01T01:00:00",
+            "搜索关键字": "batch_demo",
+            "任务名称": "Batch Demo",
+            "商品信息": {
+                "商品ID": "4001",
+                "商品标题": "Batch Item A",
+                "商品链接": "https://www.goofish.com/item?id=4001",
+                "当前售价": "¥100",
+                "发布时间": "2026-01-01 10:00",
+            },
+            "卖家信息": {"卖家昵称": "SellerA"},
+            "ai_analysis": {
+                "analysis_source": "ai",
+                "is_recommended": True,
+                "reason": "good",
+            },
+        },
+        {
+            "爬取时间": "2026-01-01T02:00:00",
+            "搜索关键字": "batch_demo",
+            "任务名称": "Batch Demo",
+            "商品信息": {
+                "商品ID": "4002",
+                "商品标题": "Batch Item B",
+                "商品链接": "https://www.goofish.com/item?id=4002",
+                "当前售价": "¥200",
+                "发布时间": "2026-01-01 11:00",
+            },
+            "卖家信息": {"卖家昵称": "SellerB"},
+            "ai_analysis": {
+                "analysis_source": "keyword",
+                "is_recommended": True,
+                "keyword_hit_count": 2,
+            },
+        },
+        {
+            "爬取时间": "2026-01-01T03:00:00",
+            "搜索关键字": "batch_demo",
+            "任务名称": "Batch Demo",
+            "商品信息": {
+                "商品ID": "4003",
+                "商品标题": "Batch Item C",
+                "商品链接": "https://www.goofish.com/item?id=4003",
+                "当前售价": "¥300",
+                "发布时间": "2026-01-01 12:00",
+            },
+            "卖家信息": {"卖家昵称": "SellerC"},
+            "ai_analysis": {
+                "analysis_source": "ai",
+                "is_recommended": False,
+                "keyword_hit_count": 0,
+            },
+        },
+    ]
+    _write_jsonl(target_file, records)
+
+    app = FastAPI()
+    app.include_router(results.router)
+    client = TestClient(app)
+
+    # Batch mark processed for items 4001 and 4002
+    resp = client.patch(
+        "/api/results/batch_demo_full_data.jsonl/items/batch",
+        json={"item_ids": ["4001", "4002"], "is_processed": True},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["updated_count"] == 2
+    assert data["is_processed"] is True
+
+    # Verify flags persist in GET
+    get_resp = client.get("/api/results/batch_demo_full_data.jsonl")
+    items = get_resp.json()["items"]
+    item_a = next(i for i in items if i["商品信息"]["商品ID"] == "4001")
+    item_b = next(i for i in items if i["商品信息"]["商品ID"] == "4002")
+    item_c = next(i for i in items if i["商品信息"]["商品ID"] == "4003")
+    assert item_a["_is_processed"] is True
+    assert item_b["_is_processed"] is True
+    assert item_c["_is_processed"] is False
+
+    # Batch hide items 4001 and 4003
+    resp = client.patch(
+        "/api/results/batch_demo_full_data.jsonl/items/batch",
+        json={"item_ids": ["4001", "4003"], "status": "hidden"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["updated_count"] == 2
+    assert data["status"] == "hidden"
+
+    # Verify hidden items are not visible by default
+    get_resp = client.get("/api/results/batch_demo_full_data.jsonl")
+    items = get_resp.json()["items"]
+    assert len(items) == 1  # only 4002 visible
+    assert items[0]["商品信息"]["商品ID"] == "4002"
+
+    # With include_hidden all three should be visible
+    get_resp = client.get("/api/results/batch_demo_full_data.jsonl", params={"include_hidden": True})
+    items = get_resp.json()["items"]
+    assert len(items) == 3
+
+    # Batch un-hide
+    resp = client.patch(
+        "/api/results/batch_demo_full_data.jsonl/items/batch",
+        json={"item_ids": ["4001", "4003"], "status": "active"},
+    )
+    assert resp.status_code == 200
+
+    get_resp = client.get("/api/results/batch_demo_full_data.jsonl")
+    assert get_resp.json()["total_items"] == 3
+
+    # Combined batch: mark contacted + process in one call
+    resp = client.patch(
+        "/api/results/batch_demo_full_data.jsonl/items/batch",
+        json={"item_ids": ["4001"], "is_processed": False, "is_contacted": True},
+    )
+    assert resp.status_code == 200
+    get_resp = client.get("/api/results/batch_demo_full_data.jsonl")
+    item_a = next(i for i in get_resp.json()["items"] if i["商品信息"]["商品ID"] == "4001")
+    assert item_a["_is_processed"] is False
+    assert item_a["_is_contacted"] is True
+
+    # Empty item_ids → 400
+    resp = client.patch(
+        "/api/results/batch_demo_full_data.jsonl/items/batch",
+        json={"item_ids": [], "is_processed": True},
+    )
+    assert resp.status_code == 400
+
+    # No fields to update → 400
+    resp = client.patch(
+        "/api/results/batch_demo_full_data.jsonl/items/batch",
+        json={"item_ids": ["4001"]},
+    )
+    assert resp.status_code == 400
+
+    # Non-existent item IDs → still returns 200 with updated_count=0 (then 404)
+    resp = client.patch(
+        "/api/results/batch_demo_full_data.jsonl/items/batch",
+        json={"item_ids": ["9999", "8888"], "is_processed": True},
+    )
+    assert resp.status_code == 404
+
+    # Invalid status value → 400
+    resp = client.patch(
+        "/api/results/batch_demo_full_data.jsonl/items/batch",
+        json={"item_ids": ["4001"], "status": "bogus"},
+    )
+    assert resp.status_code == 422
+
+    # Export respects hide_processed filter after batch processed
+    client.patch(
+        "/api/results/batch_demo_full_data.jsonl/items/batch",
+        json={"item_ids": ["4002"], "is_processed": True},
+    )
+    export_resp = client.get(
+        "/api/results/batch_demo_full_data.jsonl/export",
+        params={"hide_processed": True},
+    )
+    assert export_resp.status_code == 200
+    assert "Batch Item A" in export_resp.text  # 4001 was un-marked
+    assert "Batch Item B" not in export_resp.text  # 4002 is processed
+    assert "Batch Item C" in export_resp.text  # 4003 never processed
+
 def test_results_user_flags_toggle_and_filter(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     jsonl_dir = tmp_path / "jsonl"
