@@ -31,7 +31,7 @@
    - Commit and block `review-required`.
 
 4. **T3 Results filtering improvements** — parent: T2
-   - Add or refine result-page filters for YHB/验货宝, 包邮, 个人卖家 where data is available.
+   - Add or refine result-page filters for YHB/验货宝, 包邮, and 个人卖家 via AI `seller_type` persona where data is available.
    - Add tests around query parameters/filter persistence.
    - Commit and block `review-required`.
 
@@ -71,3 +71,10 @@ cd /root/projects/xianyu-tools
 cd web-ui && npm run build
 docker build --pull=false -t xianyu-tools:review .
 ```
+
+## Final Handoff Notes
+
+- Retained notification channels are WeCom app, Telegram, and generic Webhook. Legacy `NTFY_TOPIC_URL`, `GOTIFY_*`, `BARK_URL`, and `WX_BOT_URL` remain documented as ignored compatibility values rather than active channels.
+- Default Compose deployment builds `xianyu-tools:local` from the working tree and mounts `data/`, `state/`, `prompts/`, `logs/`, `images/`, plus legacy import sources `config.json`, `jsonl/`, and `price_history/`.
+- Task-form UI uses collapsible sections; `yhb_only` is preserved from form payload through runtime config to Xianyu search filters.
+- Results and export filters now cover 验货宝, 包邮, and 仅看个人卖家. The personal-seller filter uses AI `ai_analysis.criteria_analysis.seller_type`; missing/keyword/legacy records do not match it.
