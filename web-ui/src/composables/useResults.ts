@@ -3,50 +3,15 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import type { ResultInsights, ResultItem } from '@/types/result.d.ts'
 import * as resultsApi from '@/api/results'
-import type { GetResultContentParams, ResultSort } from '@/api/results'
 import { useWebSocket } from '@/composables/useWebSocket'
 import * as tasksApi from '@/api/tasks'
-
-type ResultFilters = Required<Pick<
-  GetResultContentParams,
-  | 'ai_recommended_only'
-  | 'keyword_recommended_only'
-  | 'include_hidden'
-  | 'yhb_only'
-  | 'free_shipping_only'
-  | 'personal_seller_only'
-  | 'sort'
->>
-
-const DEFAULT_FILTERS: ResultFilters = {
-  ai_recommended_only: false,
-  keyword_recommended_only: false,
-  include_hidden: false,
-  yhb_only: false,
-  free_shipping_only: false,
-  personal_seller_only: false,
-  sort: 'discovered_desc',
-}
-
-const BOOLEAN_QUERY_KEYS = [
-  'ai_recommended_only',
-  'keyword_recommended_only',
-  'include_hidden',
-  'yhb_only',
-  'free_shipping_only',
-  'personal_seller_only',
-] as const
-
-const VALID_SORTS: ResultSort[] = [
-  'discovered_desc',
-  'discovered_asc',
-  'publish_desc',
-  'publish_asc',
-  'price_desc',
-  'price_asc',
-  'keyword_hit_desc',
-  'keyword_hit_asc',
-]
+import {
+  BOOLEAN_RESULT_QUERY_KEYS,
+  buildResultQuery,
+  getResultQueryValue,
+  parseResultFiltersFromQuery,
+  type ResultFilters,
+} from '@/composables/resultQuery'
 
 export function useResults() {
   const { t } = useI18n()
@@ -70,39 +35,13 @@ export function useResults() {
   let readyTimer: ReturnType<typeof setTimeout> | null = null
   let isApplyingRouteQuery = false
 
-  function getQueryValue(value: unknown): string | undefined {
-    if (Array.isArray(value)) return typeof value[0] === 'string' ? value[0] : undefined
-    return typeof value === 'string' ? value : undefined
-  }
-
-  function parseBooleanQuery(value: unknown): boolean {
-    const queryValue = getQueryValue(value)
-    return queryValue === 'true' || queryValue === '1'
-  }
-
-  function parseSortQuery(value: unknown): ResultSort {
-    const queryValue = getQueryValue(value)
-    return VALID_SORTS.includes(queryValue as ResultSort)
-      ? queryValue as ResultSort
-      : DEFAULT_FILTERS.sort
-  }
-
   function parseFiltersFromQuery(): ResultFilters {
-    return {
-      ...DEFAULT_FILTERS,
-      ai_recommended_only: parseBooleanQuery(route.query.ai_recommended_only),
-      keyword_recommended_only: parseBooleanQuery(route.query.keyword_recommended_only),
-      include_hidden: parseBooleanQuery(route.query.include_hidden),
-      yhb_only: parseBooleanQuery(route.query.yhb_only),
-      free_shipping_only: parseBooleanQuery(route.query.free_shipping_only),
-      personal_seller_only: parseBooleanQuery(route.query.personal_seller_only),
-      sort: parseSortQuery(route.query.sort),
-    }
+    return parseResultFiltersFromQuery(route.query)
   }
 
   function applyQueryFilters() {
     const nextFilters = parseFiltersFromQuery()
-    BOOLEAN_QUERY_KEYS.forEach((key) => {
+    BOOLEAN_RESULT_QUERY_KEYS.forEach((key) => {
       filters[key] = nextFilters[key]
     })
     filters.sort = nextFilters.sort
@@ -133,7 +72,7 @@ export function useResults() {
         return
       }
 
-      const routeFile = getQueryValue(route.query.file)
+      const routeFile = getResultQueryValue(route.query.file)
       if (routeFile && fileList.includes(routeFile)) {
         selectedFile.value = routeFile
         return
@@ -333,18 +272,7 @@ export function useResults() {
 
   watch([selectedFile, filters], () => {
     if (isApplyingRouteQuery) return
-    const query: Record<string, string> = {}
-    if (selectedFile.value) {
-      query.file = selectedFile.value
-    }
-    BOOLEAN_QUERY_KEYS.forEach((key) => {
-      if (filters[key]) {
-        query[key] = 'true'
-      }
-    })
-    if (filters.sort !== DEFAULT_FILTERS.sort) {
-      query.sort = filters.sort
-    }
+    const query = buildResultQuery(filters, selectedFile.value)
     router.replace({ query })
   }, { deep: true })
 
@@ -354,7 +282,7 @@ export function useResults() {
       isApplyingRouteQuery = true
       try {
         applyQueryFilters()
-        const routeFile = getQueryValue(route.query.file)
+        const routeFile = getResultQueryValue(route.query.file)
         if (routeFile && files.value.includes(routeFile)) {
           selectedFile.value = routeFile
         } else if (!routeFile && !selectedFile.value && files.value.length > 0) {
@@ -374,7 +302,7 @@ export function useResults() {
   watch(
     files,
     (currentFiles) => {
-      const routeFile = getQueryValue(route.query.file)
+      const routeFile = getResultQueryValue(route.query.file)
       if (routeFile && currentFiles.includes(routeFile)) {
         selectedFile.value = routeFile
       }

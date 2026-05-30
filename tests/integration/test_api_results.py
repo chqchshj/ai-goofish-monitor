@@ -145,9 +145,27 @@ def test_results_combined_sort_param_and_invalid_sort_fallback(tmp_path, monkeyp
         assert resp.status_code == 200
         assert [item["商品信息"]["商品ID"] for item in resp.json()["items"]] == expected_ids
 
+    precedence_resp = client.get(
+        "/api/results/sort_demo_full_data.jsonl",
+        params={"sort": "publish_asc", "sort_by": "price", "sort_order": "desc"},
+    )
+    assert precedence_resp.status_code == 200
+    assert [item["商品信息"]["商品ID"] for item in precedence_resp.json()["items"]] == ["1002", "1001", "1003"]
+
     invalid_resp = client.get("/api/results/sort_demo_full_data.jsonl", params={"sort": "unknown_desc"})
     assert invalid_resp.status_code == 200
     assert [item["商品信息"]["商品ID"] for item in invalid_resp.json()["items"]] == ["1002", "1003", "1001"]
+
+    invalid_with_legacy_resp = client.get(
+        "/api/results/sort_demo_full_data.jsonl",
+        params={"sort": "unknown_desc", "sort_by": "price", "sort_order": "asc"},
+    )
+    assert invalid_with_legacy_resp.status_code == 200
+    assert [item["商品信息"]["商品ID"] for item in invalid_with_legacy_resp.json()["items"]] == [
+        "1003",
+        "1002",
+        "1001",
+    ]
 
     legacy_resp = client.get(
         "/api/results/sort_demo_full_data.jsonl",
@@ -159,6 +177,13 @@ def test_results_combined_sort_param_and_invalid_sort_fallback(tmp_path, monkeyp
     export_resp = client.get("/api/results/sort_demo_full_data.jsonl/export", params={"sort": "price_asc"})
     assert export_resp.status_code == 200
     assert [row["商品ID"] for row in _csv_rows(export_resp.text)] == ["1003", "1002", "1001"]
+
+    export_precedence_resp = client.get(
+        "/api/results/sort_demo_full_data.jsonl/export",
+        params={"sort": "publish_desc", "sort_by": "price", "sort_order": "asc"},
+    )
+    assert export_precedence_resp.status_code == 200
+    assert [row["商品ID"] for row in _csv_rows(export_precedence_resp.text)] == ["1003", "1001", "1002"]
 
 
 def test_results_attribute_filters_for_yhb_and_free_shipping_list_and_export(tmp_path, monkeypatch):

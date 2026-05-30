@@ -147,6 +147,11 @@ cd /root/projects/xianyu-tools
 - Add batch operations for hide/export/mark processed.
 - Add seller-level aggregation when enough seller profile data exists.
 
+**Result query contract:**
+- The combined `sort` query parameter is canonical and takes precedence over legacy `sort_by` / `sort_order` when both are present; invalid combined `sort` values fall back to the legacy pair for compatibility.
+- Result filters are represented in the URL query so the result page can be refreshed or shared without losing state.
+- `lastSelectedResultFile` is only a fallback when the URL has no `file` query parameter.
+
 **Verification:**
 ```bash
 cd /root/projects/xianyu-tools
