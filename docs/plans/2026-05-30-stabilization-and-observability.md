@@ -169,6 +169,8 @@ cd web-ui && npm run build
 
 **Objective:** Reduce noise while keeping high-value alerts fast.
 
+**Status (2026-05-30):** P4-1（阈值 + item dedup）与 P4-3（per-seller throttle）已落地到 `master`，由 4 个 env-only 开关控制，默认全部关闭。运维启用顺序、风险与回滚步骤见 `docs/runbooks/notification-throttle-ops.md`。开发侧契约见 `AGENTS.md` § "P4-1 通知降噪契约"。本节余下部分保留为 P4-2 之后的候选方向参考。
+
 **Likely files:**
 - Modify: `src/services/notification_service.py`
 - Modify: `src/services/notification_config_service.py`
