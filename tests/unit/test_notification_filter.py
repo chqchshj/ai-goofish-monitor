@@ -11,6 +11,7 @@ from src.services.notification_filter import (
     derive_recommendation_level,
     derive_recommendation_score,
     evaluate_notification,
+    seller_throttle_key_for,
 )
 
 
@@ -153,6 +154,12 @@ def _good_record(item_id: str = "1") -> dict:
     }
 
 
+def _good_record_with_seller(item_id: str, *, seller_id: str) -> dict:
+    record = _good_record(item_id)
+    record["seller_id"] = seller_id
+    return record
+
+
 def test_evaluate_default_policy_always_passes():
     decision = evaluate_notification(_good_record(), policy=NotificationPolicy(), now=0.0)
     assert decision.should_notify is True
@@ -256,3 +263,186 @@ def test_custom_scorer_overrides_default():
     decision = evaluate_notification(record, policy=policy, now=0.0)
     assert decision.should_notify is False
     assert decision.score == 12.5
+
+
+# ---------------------------------------------------------------------------
+# P4-3 seller throttle
+# ---------------------------------------------------------------------------
+
+
+def test_seller_throttle_key_prefers_seller_id():
+    record = {"seller_id": "user789"}
+    assert seller_throttle_key_for(record) == "seller:user789"
+
+
+def test_seller_throttle_key_uses_vendor_info_seller_id():
+    record = {"卖家信息": {"卖家ID": "123456"}}
+    assert seller_throttle_key_for(record) == "seller:123456"
+
+
+def test_seller_throttle_key_falls_back_to_nickname():
+    record = {"卖家信息": {"卖家昵称": "闲鱼达人"}}
+    assert seller_throttle_key_for(record) == "seller:闲鱼达人"
+
+
+def test_seller_throttle_key_falls_back_to_homepage():
+    record = {"卖家信息": {"卖家主页": "https://www.goofish.com/user/abc"}}
+    assert seller_throttle_key_for(record) == "seller:https://www.goofish.com/user/abc"
+
+
+def test_seller_throttle_key_prefers_seller_id_over_nickname():
+    record = {
+        "seller_id": "direct456",
+        "卖家信息": {"卖家ID": "123", "卖家昵称": "someone"},
+    }
+    assert seller_throttle_key_for(record) == "seller:direct456"
+
+
+def test_seller_throttle_key_returns_none_without_signal():
+    assert seller_throttle_key_for({}) is None
+    assert seller_throttle_key_for({"卖家信息": {}}) is None
+
+
+def test_seller_throttle_key_handles_non_dict():
+    assert seller_throttle_key_for(None) is None  # type: ignore[arg-type]
+
+
+def test_evaluate_seller_throttle_blocks_repeat_within_window():
+    store = InMemoryDedupStore()
+    policy = NotificationPolicy(seller_throttle_window_seconds=600)
+    record = _good_record_with_seller("a", seller_id="seller1")
+
+    first = evaluate_notification(
+        record, policy=policy, seller_throttle_store=store, now=0.0
+    )
+    assert first.should_notify is True
+    assert first.seller_throttle_key == "seller:seller1"
+
+    second = evaluate_notification(
+        record, policy=policy, seller_throttle_store=store, now=300.0
+    )
+    assert second.should_notify is False
+    assert "卖家" in second.skip_reason
+
+    third = evaluate_notification(
+        record, policy=policy, seller_throttle_store=store, now=601.0
+    )
+    assert third.should_notify is True
+
+
+def test_evaluate_seller_throttle_allows_different_sellers():
+    store = InMemoryDedupStore()
+    policy = NotificationPolicy(seller_throttle_window_seconds=600)
+
+    a = evaluate_notification(
+        _good_record_with_seller("a", seller_id="s1"),
+        policy=policy,
+        seller_throttle_store=store,
+        now=0.0,
+    )
+    b = evaluate_notification(
+        _good_record_with_seller("b", seller_id="s2"),
+        policy=policy,
+        seller_throttle_store=store,
+        now=10.0,
+    )
+    assert a.should_notify is True
+    assert b.should_notify is True
+
+
+def test_evaluate_seller_throttle_passes_without_seller_key():
+    """缺失 seller 字段时 seller throttle 不阻断, 不影响 item dedup。"""
+    store = InMemoryDedupStore()
+    policy = NotificationPolicy(seller_throttle_window_seconds=600)
+    record = {"商品信息": {"商品ID": "item99"}, "ai_analysis": {"is_recommended": True}}
+
+    decision = evaluate_notification(
+        record, policy=policy, seller_throttle_store=store, now=0.0
+    )
+    assert decision.should_notify is True
+    assert decision.seller_throttle_key is None
+
+
+def test_evaluate_seller_throttle_passes_without_store():
+    policy = NotificationPolicy(seller_throttle_window_seconds=600)
+    record = _good_record_with_seller("a", seller_id="s1")
+    decision = evaluate_notification(
+        record, policy=policy, seller_throttle_store=None, now=0.0
+    )
+    assert decision.should_notify is True
+
+
+def test_evaluate_seller_throttle_independent_from_item_dedup():
+    """seller throttle 与 item dedup 各自独立; seller throttle 窗口内同卖家只通知一次。"""
+    dedup = InMemoryDedupStore()
+    seller_store = InMemoryDedupStore()
+    policy = NotificationPolicy(
+        dedup_window_seconds=600, seller_throttle_window_seconds=600
+    )
+
+    # 卖家 s1, 商品 a — 应通知
+    a1 = evaluate_notification(
+        _good_record_with_seller("a", seller_id="s1"),
+        policy=policy,
+        dedup_store=dedup,
+        seller_throttle_store=seller_store,
+        now=0.0,
+    )
+    assert a1.should_notify is True
+
+    # 卖家 s1, 商品 b — seller throttle 窗口内同卖家不再通知
+    b1 = evaluate_notification(
+        _good_record_with_seller("b", seller_id="s1"),
+        policy=policy,
+        dedup_store=dedup,
+        seller_throttle_store=seller_store,
+        now=10.0,
+    )
+    assert b1.should_notify is False
+    assert "卖家" in (b1.skip_reason or "")
+
+    # 卖家 s2, 商品 c — 不同卖家不同商品, 应通知
+    c1 = evaluate_notification(
+        _good_record_with_seller("c", seller_id="s2"),
+        policy=policy,
+        dedup_store=dedup,
+        seller_throttle_store=seller_store,
+        now=20.0,
+    )
+    assert c1.should_notify is True
+
+    # 卖家 s1, 商品 a 再次 (窗口过后) — 过窗后应通知
+    a2 = evaluate_notification(
+        _good_record_with_seller("a", seller_id="s1"),
+        policy=policy,
+        dedup_store=dedup,
+        seller_throttle_store=seller_store,
+        now=601.0,
+    )
+    assert a2.should_notify is True
+
+
+def test_evaluate_seller_throttle_inert_still_marks():
+    """inert 策略下 seller throttle store 也要记录以便平滑切换。"""
+    store = InMemoryDedupStore()
+    policy = NotificationPolicy()  # inert
+    record = _good_record_with_seller("x", seller_id="s99")
+
+    decision = evaluate_notification(
+        record, policy=policy, seller_throttle_store=store, now=42.0
+    )
+    assert decision.should_notify is True
+
+    later = evaluate_notification(
+        record,
+        policy=NotificationPolicy(seller_throttle_window_seconds=60),
+        seller_throttle_store=store,
+        now=80.0,
+    )
+    assert later.should_notify is False
+
+
+def test_notification_decision_includes_seller_throttle_key():
+    record = _good_record_with_seller("a", seller_id="s1")
+    decision = evaluate_notification(record, now=0.0)
+    assert decision.seller_throttle_key == "seller:s1"

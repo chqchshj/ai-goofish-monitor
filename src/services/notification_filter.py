@@ -27,6 +27,46 @@ from typing import Callable, Optional, Protocol
 from urllib.parse import urlparse, urlunparse
 
 # ---------------------------------------------------------------------------
+# 卖家限流
+# ---------------------------------------------------------------------------
+
+_SELLER_THROTTLE_KEY_PREFIX = "seller:"
+
+
+def seller_throttle_key_for(record: dict) -> Optional[str]:
+    """从 record 推导 seller throttle key。
+
+    优先级: sellerId -> 卖家昵称 -> 卖家主页。
+    任一字段有效 (非空字符串) 即返回 ``seller:<value>``。
+    全部缺失返回 None, 表示不启用 seller throttle。
+
+    数据来源: record 根层级 ``seller_id``, 或 ``卖家信息`` 子字段。
+    与 ``dedup_key_for`` 完全独立 —— item dedup 不受 seller throttle 影响。
+    """
+    if not isinstance(record, dict):
+        return None
+
+    seller_id = record.get("seller_id")
+    if seller_id is not None and str(seller_id).strip():
+        return f"{_SELLER_THROTTLE_KEY_PREFIX}{str(seller_id).strip()}"
+
+    info = record.get("卖家信息") if isinstance(record, dict) else None
+    if isinstance(info, dict):
+        sid = info.get("卖家ID")
+        if sid is not None and str(sid).strip():
+            return f"{_SELLER_THROTTLE_KEY_PREFIX}{str(sid).strip()}"
+
+        nickname = info.get("卖家昵称")
+        if isinstance(nickname, str) and nickname.strip():
+            return f"{_SELLER_THROTTLE_KEY_PREFIX}{nickname.strip()}"
+
+        homepage = info.get("卖家主页") or info.get("主页")
+        if isinstance(homepage, str) and homepage.strip():
+            return f"{_SELLER_THROTTLE_KEY_PREFIX}{homepage.strip()}"
+
+    return None
+
+# ---------------------------------------------------------------------------
 # 评分 / 等级
 # ---------------------------------------------------------------------------
 
@@ -237,6 +277,7 @@ class NotificationPolicy:
     min_score: Optional[float] = None
     min_level: Optional[str] = None
     dedup_window_seconds: int = 0
+    seller_throttle_window_seconds: int = 0
     scorer: Optional[Scorer] = field(default=None, repr=False)
 
     def is_inert(self) -> bool:
@@ -245,6 +286,7 @@ class NotificationPolicy:
             self.min_score is None
             and self.min_level is None
             and self.dedup_window_seconds <= 0
+            and self.seller_throttle_window_seconds <= 0
         )
 
     def score(self, record: dict) -> float:
@@ -262,6 +304,7 @@ class NotificationDecision:
         level: low/medium/high。
         skip_reason: should_notify=False 时的可读跳过原因; 否则为 None。
         dedup_key: 用于幂等的 key, 可能为 None。
+        seller_throttle_key: seller throttle key, 可能为 None。
     """
 
     should_notify: bool
@@ -269,12 +312,14 @@ class NotificationDecision:
     level: str
     skip_reason: Optional[str] = None
     dedup_key: Optional[str] = None
+    seller_throttle_key: Optional[str] = None
 
 
 def evaluate_notification(
     record: dict,
     policy: Optional[NotificationPolicy] = None,
     dedup_store: Optional[DedupStore] = None,
+    seller_throttle_store: Optional[DedupStore] = None,
     now: Optional[float] = None,
 ) -> NotificationDecision:
     """对一条 result record 做通知降噪决策。
@@ -285,7 +330,7 @@ def evaluate_notification(
 
     side-effect: 若返回 ``should_notify=True`` 且 dedup_store 与 dedup_key 同时
     存在, 会调用 ``dedup_store.mark`` 记录本次发送, 后续同 key 命中窗口将被
-    抑制。这是显式的、可注入的副作用, 便于测试与回滚。
+    抑制。同理, seller_throttle_store 会记录 seller throttle key。
     """
     if policy is None:
         policy = NotificationPolicy()
@@ -298,18 +343,22 @@ def evaluate_notification(
     score = policy.score(record)
     level = derive_recommendation_level(score)
     dedup_key = dedup_key_for(record)
+    seller_key = seller_throttle_key_for(record)
 
     if policy.is_inert():
         if dedup_store is not None and dedup_key:
             # inert 策略下不主动做窗口拦截, 但仍记录最近发送时间, 方便外层
             # 在切换策略时不出现"刚启用就把所有历史 key 全发一遍"的尴尬。
             dedup_store.mark(dedup_key, now)
+        if seller_throttle_store is not None and seller_key:
+            seller_throttle_store.mark(seller_key, now)
         return NotificationDecision(
             should_notify=True,
             score=score,
             level=level,
             skip_reason=None,
             dedup_key=dedup_key,
+            seller_throttle_key=seller_key,
         )
 
     if policy.min_score is not None and score < policy.min_score:
@@ -319,6 +368,7 @@ def evaluate_notification(
             level=level,
             skip_reason=f"score {score:.1f} 低于阈值 {policy.min_score:.1f}",
             dedup_key=dedup_key,
+            seller_throttle_key=seller_key,
         )
 
     if policy.min_level is not None and not _level_at_least(level, policy.min_level):
@@ -328,6 +378,7 @@ def evaluate_notification(
             level=level,
             skip_reason=f"等级 {level} 低于 {policy.min_level}",
             dedup_key=dedup_key,
+            seller_throttle_key=seller_key,
         )
 
     if (
@@ -344,10 +395,33 @@ def evaluate_notification(
                 f"{policy.dedup_window_seconds}s 窗口内已通知过 {dedup_key}"
             ),
             dedup_key=dedup_key,
+            seller_throttle_key=seller_key,
+        )
+
+    if (
+        seller_throttle_store is not None
+        and seller_key
+        and policy.seller_throttle_window_seconds > 0
+        and seller_throttle_store.seen_within(
+            seller_key, policy.seller_throttle_window_seconds, now
+        )
+    ):
+        return NotificationDecision(
+            should_notify=False,
+            score=score,
+            level=level,
+            skip_reason=(
+                f"卖家 {seller_key} 在 {policy.seller_throttle_window_seconds}s "
+                f"窗口内已通知过"
+            ),
+            dedup_key=dedup_key,
+            seller_throttle_key=seller_key,
         )
 
     if dedup_store is not None and dedup_key and policy.dedup_window_seconds > 0:
         dedup_store.mark(dedup_key, now)
+    if seller_throttle_store is not None and seller_key and policy.seller_throttle_window_seconds > 0:
+        seller_throttle_store.mark(seller_key, now)
 
     return NotificationDecision(
         should_notify=True,
@@ -355,6 +429,7 @@ def evaluate_notification(
         level=level,
         skip_reason=None,
         dedup_key=dedup_key,
+        seller_throttle_key=seller_key,
     )
 
 
@@ -371,4 +446,5 @@ __all__ = [
     "derive_recommendation_level",
     "derive_recommendation_score",
     "evaluate_notification",
+    "seller_throttle_key_for",
 ]
