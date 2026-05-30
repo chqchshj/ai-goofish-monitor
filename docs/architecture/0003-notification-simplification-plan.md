@@ -45,7 +45,7 @@ Failure-guard and task-failure notifications still use global defaults because t
 
 ## UI/API Shape
 
-The settings UI exposes WeCom App and Telegram as normal channels, plus Webhook as advanced compatibility. It no longer renders cards or test buttons for `ntfy`, `bark`, `gotify`, or legacy `wecom`.
+The settings UI exposes WeCom App and Telegram as normal channels, plus Webhook as advanced compatibility. Channel details are collapsed by default and expand only when the operator clicks Configure. It no longer renders cards or test buttons for `ntfy`, `bark`, `gotify`, or legacy `wecom`.
 
 `GET /api/settings/notifications` returns retained notification fields and channel metadata only. `GET /api/settings/status` reports retained notification status flags only. `POST /api/settings/notifications/test` rejects retired channel names.
 

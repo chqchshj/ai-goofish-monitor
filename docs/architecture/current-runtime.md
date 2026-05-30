@@ -12,7 +12,9 @@ architecture.
    `src.scraper.scrape_xianyu(task_config, debug_limit)`.
 5. `src/scraper.py` drives Playwright browser/session setup, Xianyu search,
    pagination, item detail collection, seller profile collection, filtering,
-   AI or keyword analysis, result persistence, and notification.
+   AI or keyword analysis, result persistence, and notification. Task search
+   filters include personal seller, free shipping, YHB/验货宝-only,
+   fresh-listing window, region, and price range.
 6. Search pagination helpers live in `src/services/search_pagination.py`.
 7. AI analysis is split across `src/ai_handler.py`,
    `src/services/item_analysis_dispatcher.py`, and related compatibility code.
@@ -28,6 +30,8 @@ architecture.
   for compatibility.
 - `state/`, `prompts/`, `logs/`, and `images/` remain filesystem-backed runtime
   directories.
+- Docker Compose bind-mounts `.env` to `/app/.env`, so Web UI settings writes
+  are persisted to the repository `.env` when using the default compose file.
 
 ## Hotspots
 
@@ -38,5 +42,5 @@ architecture.
   models, and runtime-only normalization.
 - AI request and response handling has compatibility layers in multiple modules.
 - `web-ui/src/components/tasks/TaskForm.vue` owns form state, validation,
-  scheduling, account strategy, AI mode, keyword mode, region selection, and
-  notification targets.
+  scheduling, account strategy, AI mode, keyword mode, region selection, seller
+  publication filters, and notification targets.
