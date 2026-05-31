@@ -199,7 +199,7 @@ async function handleSaveBlacklistRules() {
 
     <ResultsInsightsPanel :insights="insights" :selected-task-label="selectedTaskLabel" />
 
-    <SellersPanel :aggregation="sellerAggregation" @select-seller="selectSellerFilter" />
+    <SellersPanel :aggregation="sellerAggregation" :result-filename="selectedFile" @select-seller="selectSellerFilter" />
 
     <div
       v-if="filters.seller"

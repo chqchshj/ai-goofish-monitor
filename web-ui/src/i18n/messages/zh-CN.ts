@@ -17,6 +17,7 @@ const zhCN = {
     results: '结果查看',
     logs: '运行日志',
     settings: '系统设置',
+    sellerDetail: '卖家详情',
   },
   common: {
     cancel: '取消',

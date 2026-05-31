@@ -17,6 +17,7 @@ const enUS = {
     results: 'Results',
     logs: 'Logs',
     settings: 'Settings',
+    sellerDetail: 'Seller Detail',
   },
   common: {
     cancel: 'Cancel',

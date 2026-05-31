@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import type { GetSellerAggregationResponse } from '@/api/results'
 
 interface Props {
   aggregation: GetSellerAggregationResponse | null
+  resultFilename?: string | null
 }
 
 interface Emits {
@@ -14,6 +16,7 @@ interface Emits {
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 const { t } = useI18n()
+const router = useRouter()
 
 const DEFAULT_VISIBLE = 6
 
@@ -37,6 +40,14 @@ function toggleExpand() {
 
 function handleSellerClick(nickname: string) {
   emit('select-seller', nickname)
+}
+
+function goToSellerDetail(nickname: string) {
+  router.push({
+    name: 'SellerDetail',
+    params: { sellerKey: nickname },
+    query: props.resultFilename ? { result_filename: props.resultFilename } : undefined,
+  })
 }
 </script>
 
@@ -99,10 +110,18 @@ function handleSellerClick(nickname: string) {
           </div>
         </div>
 
-        <div class="text-right shrink-0">
+        <div class="text-right shrink-0 flex flex-col items-end gap-1">
           <div class="text-xs text-slate-400">
             {{ seller.latest_crawl_time ? seller.latest_crawl_time.slice(0, 16).replace('T', ' ') : '' }}
           </div>
+          <button
+            type="button"
+            class="text-xs text-primary hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded"
+            :aria-label="t('sellerDetail.viewDetail')"
+            @click.stop="goToSellerDetail(seller.seller_nickname)"
+          >
+            {{ t('sellerDetail.viewDetail') }}
+          </button>
         </div>
       </div>
     </div>
