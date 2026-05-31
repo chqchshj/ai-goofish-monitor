@@ -138,6 +138,56 @@ SCHEMA_STATEMENTS = (
     CREATE INDEX IF NOT EXISTS idx_seller_tracking_status
     ON seller_tracking(status)
     """,
+    # M12-1: 购买动作候选表
+    """
+    CREATE TABLE IF NOT EXISTS purchase_action_candidates (
+        id TEXT PRIMARY KEY,
+        item_id TEXT NOT NULL,
+        task_id INTEGER,
+        status TEXT NOT NULL DEFAULT 'pending',
+        action_type TEXT NOT NULL,
+        price REAL NOT NULL,
+        seller_id TEXT,
+        seller_name TEXT,
+        item_title TEXT NOT NULL,
+        item_url TEXT NOT NULL,
+        ai_reason TEXT NOT NULL,
+        policy_reason TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        expires_at TEXT,
+        confirmed_at TEXT,
+        executed_at TEXT,
+        extra_data TEXT NOT NULL DEFAULT '{}'
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_purchase_candidates_status
+    ON purchase_action_candidates(status)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_purchase_candidates_item_id
+    ON purchase_action_candidates(item_id)
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_purchase_candidates_created_at
+    ON purchase_action_candidates(created_at DESC)
+    """,
+    # M12-1: 购买动作审计日志表
+    """
+    CREATE TABLE IF NOT EXISTS purchase_action_audit_logs (
+        id TEXT PRIMARY KEY,
+        candidate_id TEXT NOT NULL,
+        action TEXT NOT NULL,
+        actor TEXT NOT NULL,
+        details TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_purchase_audit_candidate_id
+    ON purchase_action_audit_logs(candidate_id)
+    """,
 )
 
 

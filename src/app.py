@@ -18,6 +18,7 @@ from src.api.routes import (
     websocket,
     accounts,
     sellers,
+    purchase_actions,
 )
 from src.api.dependencies import (
     set_process_service,
@@ -114,6 +115,7 @@ app.include_router(login_state.router)
 app.include_router(websocket.router)
 app.include_router(accounts.router)
 app.include_router(sellers.router)
+app.include_router(purchase_actions.router)
 
 # 挂载静态文件
 # 旧的静态文件目录（用于截图等）
