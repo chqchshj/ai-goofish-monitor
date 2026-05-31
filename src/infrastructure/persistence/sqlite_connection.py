@@ -124,6 +124,20 @@ SCHEMA_STATEMENTS = (
     CREATE INDEX IF NOT EXISTS idx_snapshots_keyword_item_time
     ON price_snapshots(keyword_slug, item_id, snapshot_time DESC)
     """,
+    """
+    CREATE TABLE IF NOT EXISTS seller_tracking (
+        seller_key TEXT PRIMARY KEY,
+        status TEXT NOT NULL DEFAULT 'normal',
+        notes TEXT NOT NULL DEFAULT '',
+        tags_json TEXT NOT NULL DEFAULT '[]',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+    )
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS idx_seller_tracking_status
+    ON seller_tracking(status)
+    """,
 )
 
 
