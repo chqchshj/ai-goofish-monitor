@@ -93,6 +93,8 @@ export interface ResultInsights {
   latest_snapshot_at?: string | null;
 }
 
+export type ResultItemStatus = 'active' | 'hidden' | 'expired'
+
 export interface ResultItem {
   "爬取时间": string;
   "搜索关键字": string;
@@ -101,8 +103,10 @@ export interface ResultItem {
   "卖家信息": SellerInfo;
   ai_analysis: AiAnalysis;
   price_insight?: PriceInsight;
-  _status?: 'active' | 'hidden' | 'expired';
+  _status?: ResultItemStatus;
   _effective_hidden?: boolean;
   _hidden_reason?: 'manual' | 'rule' | 'expired' | null;
   _matched_blacklist_keywords?: string[];
+  _is_processed?: boolean;
+  _is_contacted?: boolean;
 }

@@ -29,6 +29,9 @@ interface Props {
   yhbOnly: boolean
   freeShippingOnly: boolean
   personalSellerOnly: boolean
+  processedOnly: boolean
+  contactedOnly: boolean
+  hideProcessed: boolean
   sort: ResultSort
   isLoading: boolean
   isReady: boolean
@@ -74,6 +77,9 @@ const emit = defineEmits<{
   (e: 'update:yhbOnly', value: boolean): void
   (e: 'update:freeShippingOnly', value: boolean): void
   (e: 'update:personalSellerOnly', value: boolean): void
+  (e: 'update:processedOnly', value: boolean): void
+  (e: 'update:contactedOnly', value: boolean): void
+  (e: 'update:hideProcessed', value: boolean): void
   (e: 'update:sort', value: ResultSort): void
   (e: 'refresh'): void
   (e: 'export'): void
@@ -195,6 +201,33 @@ function handleToggleKeywordRecommended(value: boolean) {
             @update:modelValue="(value) => emit('update:personalSellerOnly', value === true)"
           />
           <Label for="personal-seller-only" class="cursor-pointer">{{ t('results.filters.personalSellerOnly') }}</Label>
+        </div>
+
+        <div class="flex items-center space-x-2">
+          <Checkbox
+            id="processed-only"
+            :model-value="props.processedOnly"
+            @update:modelValue="(value) => emit('update:processedOnly', value === true)"
+          />
+          <Label for="processed-only" class="cursor-pointer">{{ t('results.filters.processedOnly') }}</Label>
+        </div>
+
+        <div class="flex items-center space-x-2">
+          <Checkbox
+            id="contacted-only"
+            :model-value="props.contactedOnly"
+            @update:modelValue="(value) => emit('update:contactedOnly', value === true)"
+          />
+          <Label for="contacted-only" class="cursor-pointer">{{ t('results.filters.contactedOnly') }}</Label>
+        </div>
+
+        <div class="flex items-center space-x-2">
+          <Checkbox
+            id="hide-processed"
+            :model-value="props.hideProcessed"
+            @update:modelValue="(value) => emit('update:hideProcessed', value === true)"
+          />
+          <Label for="hide-processed" class="cursor-pointer">{{ t('results.filters.hideProcessed') }}</Label>
         </div>
       </div>
 

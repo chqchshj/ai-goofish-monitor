@@ -37,3 +37,21 @@
 - 复制 `.env.example` 为 `.env`，设置必填项 `OPENAI_API_KEY`、`OPENAI_BASE_URL`、`OPENAI_MODEL_NAME` 等。
 - 不要提交真实凭据或 cookies（如 `state.json`）；Playwright 需本地浏览器，Docker 镜像已预装 Chromium。
 - Web 认证默认 `admin/admin123`，生产环境务必修改，推荐启用 HTTPS 并限制访问来源。
+
+## P4-1 通知降噪契约（2026-05 起）
+
+通知策略由 `src/services/notification_filter.py` 与 `src/services/result_pipeline_service.py` 共同维护，作为可演进的 seam：
+
+- 决策入口：`evaluate_notification(record, policy, dedup_store, seller_throttle_store, now)` —— 纯函数，决定一条已被 AI 标记 `is_recommended=True` 的记录是否真的发送通知。
+- 评分启发式：从 `criteria_analysis.<field>.status`（PASS/WARN/FAIL/UNKNOWN）求平均权重，再按 `risk_tags` 数量线性扣分，归一到 0..100；映射 low(<50) / medium(50-79) / high(>=80)。等 AI 输出原生 `recommendation_score` 字段时，可通过 `NotificationPolicy.scorer` 注入新打分函数，无需改 seam。
+- 去重：`InMemoryDedupStore` 进程内 TTL，按 `商品ID > 规范化商品链接`（去 query/fragment）生成 key；不持久化、重启即清空（P4-1 不写生产 DB）。
+- 卖家限流（P4-3）：`InMemoryDedupStore`（独立实例），按 `seller_id > 卖家信息.卖家ID > 卖家昵称 > 卖家主页` 推导 seller key；缺失全部卖家字段时 seller throttle 自动放行（不影响 item dedup）。seller throttle 与 item dedup 完全独立 —— 同卖家不同商品各发一次，同商品同卖家只发一次。
+- 配置入口（env-only，刻意不出现在 `/settings/notification`）：
+  - `NOTIFICATION_MIN_SCORE`：浮点阈值，留空=不过滤。
+  - `NOTIFICATION_MIN_LEVEL`：`low|medium|high`，留空=不过滤。
+  - `NOTIFICATION_DEDUP_WINDOW_SECONDS`：>0 时启用去重。
+  - `NOTIFICATION_SELLER_THROTTLE_WINDOW_SECONDS`（P4-3）：>0 时启用以 seller 为维度的短窗口限流。
+- 默认行为：未配置任何字段时，`ResultPipelineService` 行为与 P3 时期完全一致——`is_recommended=True` 即通知，否则不通知。
+- 仅作用范围：影响 AI 推荐链路（`ResultPipelineService._notify_if_recommended`）；任务暂停/失败告警（scraper.py / process_service.py）继续走原通道，不受降噪影响。
+- 切换平滑：`evaluate_notification` 在 inert 策略下仍会 `dedup_store.mark` 和 `seller_throttle_store.mark`，避免运维启用窗口的瞬间把历史 key 全部重发。
+- 运维启用顺序、风险与回滚步骤见 `docs/runbooks/notification-throttle-ops.md`（不在本契约范围内，文档单独维护）。

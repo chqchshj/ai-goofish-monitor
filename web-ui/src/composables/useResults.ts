@@ -2,51 +2,18 @@ import { ref, reactive, watch, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import type { ResultInsights, ResultItem } from '@/types/result.d.ts'
+import type { ResultItemStatus } from '@/types/result.d.ts'
 import * as resultsApi from '@/api/results'
-import type { GetResultContentParams, ResultSort } from '@/api/results'
+import type { GetSellerAggregationResponse } from '@/api/results'
 import { useWebSocket } from '@/composables/useWebSocket'
 import * as tasksApi from '@/api/tasks'
-
-type ResultFilters = Required<Pick<
-  GetResultContentParams,
-  | 'ai_recommended_only'
-  | 'keyword_recommended_only'
-  | 'include_hidden'
-  | 'yhb_only'
-  | 'free_shipping_only'
-  | 'personal_seller_only'
-  | 'sort'
->>
-
-const DEFAULT_FILTERS: ResultFilters = {
-  ai_recommended_only: false,
-  keyword_recommended_only: false,
-  include_hidden: false,
-  yhb_only: false,
-  free_shipping_only: false,
-  personal_seller_only: false,
-  sort: 'discovered_desc',
-}
-
-const BOOLEAN_QUERY_KEYS = [
-  'ai_recommended_only',
-  'keyword_recommended_only',
-  'include_hidden',
-  'yhb_only',
-  'free_shipping_only',
-  'personal_seller_only',
-] as const
-
-const VALID_SORTS: ResultSort[] = [
-  'discovered_desc',
-  'discovered_asc',
-  'publish_desc',
-  'publish_asc',
-  'price_desc',
-  'price_asc',
-  'keyword_hit_desc',
-  'keyword_hit_asc',
-]
+import {
+  BOOLEAN_RESULT_QUERY_KEYS,
+  buildResultQuery,
+  getResultQueryValue,
+  parseResultFiltersFromQuery,
+  type ResultFilters,
+} from '@/composables/resultQuery'
 
 export function useResults() {
   const { t } = useI18n()
@@ -56,7 +23,9 @@ export function useResults() {
   const files = ref<string[]>([])
   const selectedFile = ref<string | null>(null)
   const results = ref<ResultItem[]>([])
+  const selectedItemIds = ref<Set<string>>(new Set())
   const insights = ref<ResultInsights | null>(null)
+  const sellerAggregation = ref<GetSellerAggregationResponse | null>(null)
   const totalItems = ref(0)
   const page = ref(1)
   const limit = ref(100)
@@ -70,42 +39,17 @@ export function useResults() {
   let readyTimer: ReturnType<typeof setTimeout> | null = null
   let isApplyingRouteQuery = false
 
-  function getQueryValue(value: unknown): string | undefined {
-    if (Array.isArray(value)) return typeof value[0] === 'string' ? value[0] : undefined
-    return typeof value === 'string' ? value : undefined
-  }
-
-  function parseBooleanQuery(value: unknown): boolean {
-    const queryValue = getQueryValue(value)
-    return queryValue === 'true' || queryValue === '1'
-  }
-
-  function parseSortQuery(value: unknown): ResultSort {
-    const queryValue = getQueryValue(value)
-    return VALID_SORTS.includes(queryValue as ResultSort)
-      ? queryValue as ResultSort
-      : DEFAULT_FILTERS.sort
-  }
-
   function parseFiltersFromQuery(): ResultFilters {
-    return {
-      ...DEFAULT_FILTERS,
-      ai_recommended_only: parseBooleanQuery(route.query.ai_recommended_only),
-      keyword_recommended_only: parseBooleanQuery(route.query.keyword_recommended_only),
-      include_hidden: parseBooleanQuery(route.query.include_hidden),
-      yhb_only: parseBooleanQuery(route.query.yhb_only),
-      free_shipping_only: parseBooleanQuery(route.query.free_shipping_only),
-      personal_seller_only: parseBooleanQuery(route.query.personal_seller_only),
-      sort: parseSortQuery(route.query.sort),
-    }
+    return parseResultFiltersFromQuery(route.query)
   }
 
   function applyQueryFilters() {
     const nextFilters = parseFiltersFromQuery()
-    BOOLEAN_QUERY_KEYS.forEach((key) => {
+    BOOLEAN_RESULT_QUERY_KEYS.forEach((key) => {
       filters[key] = nextFilters[key]
     })
     filters.sort = nextFilters.sort
+    filters.seller = nextFilters.seller
   }
 
   const filters = reactive<ResultFilters>(parseFiltersFromQuery())
@@ -122,6 +66,41 @@ export function useResults() {
     return filename.replace(/_full_data\.jsonl$/i, '').toLowerCase()
   }
 
+  function getItemId(item: ResultItem) {
+    return item.商品信息?.商品ID || ''
+  }
+
+  function clearSelection() {
+    selectedItemIds.value = new Set()
+  }
+
+  function toggleItemSelection(item: ResultItem, selected?: boolean) {
+    const itemId = getItemId(item)
+    if (!itemId) return
+    const next = new Set(selectedItemIds.value)
+    const shouldSelect = selected ?? !next.has(itemId)
+    if (shouldSelect) {
+      next.add(itemId)
+    } else {
+      next.delete(itemId)
+    }
+    selectedItemIds.value = next
+  }
+
+  function toggleCurrentPageSelection(selected?: boolean) {
+    const next = new Set(selectedItemIds.value)
+    const itemIds = results.value.map(getItemId).filter(Boolean)
+    const shouldSelect = selected ?? !itemIds.every((itemId) => next.has(itemId))
+    itemIds.forEach((itemId) => {
+      if (shouldSelect) {
+        next.add(itemId)
+      } else {
+        next.delete(itemId)
+      }
+    })
+    selectedItemIds.value = next
+  }
+
   // Methods
   async function fetchFiles() {
     try {
@@ -133,7 +112,7 @@ export function useResults() {
         return
       }
 
-      const routeFile = getQueryValue(route.query.file)
+      const routeFile = getResultQueryValue(route.query.file)
       if (routeFile && fileList.includes(routeFile)) {
         selectedFile.value = routeFile
         return
@@ -173,6 +152,10 @@ export function useResults() {
       })
       results.value = data.items
       totalItems.value = data.total_items
+      const visibleIds = new Set(data.items.map(getItemId).filter(Boolean))
+      selectedItemIds.value = new Set(
+        [...selectedItemIds.value].filter((itemId) => visibleIds.has(itemId))
+      )
     } catch (e) {
       if (e instanceof Error) error.value = e
       results.value = []
@@ -193,6 +176,23 @@ export function useResults() {
     } catch (e) {
       if (e instanceof Error) error.value = e
       insights.value = null
+    }
+  }
+
+  async function fetchSellerAggregation() {
+    if (!selectedFile.value) {
+      sellerAggregation.value = null
+      return
+    }
+
+    try {
+      sellerAggregation.value = await resultsApi.getSellerAggregation(selectedFile.value, {
+        ...filters,
+        seller: undefined,
+      })
+    } catch (e) {
+      if (e instanceof Error) error.value = e
+      sellerAggregation.value = null
     }
   }
 
@@ -247,6 +247,7 @@ export function useResults() {
     if (selectedFile.value && selectedFile.value === oldFile) {
       fetchResults()
       fetchInsights()
+      fetchSellerAggregation()
     }
   })
 
@@ -260,6 +261,7 @@ export function useResults() {
     if (selectedFile.value && selectedFile.value === current) {
       await fetchResults()
       await fetchInsights()
+      await fetchSellerAggregation()
       await fetchBlacklistRules()
     }
   }
@@ -267,6 +269,14 @@ export function useResults() {
   function exportSelectedResults() {
     if (!selectedFile.value) return
     resultsApi.downloadResultExport(selectedFile.value, { ...filters })
+  }
+
+  function selectSellerFilter(sellerNickname: string) {
+    filters.seller = sellerNickname.trim()
+  }
+
+  function clearSellerFilter() {
+    filters.seller = ''
   }
 
   async function deleteSelectedFile(filename?: string) {
@@ -295,12 +305,48 @@ export function useResults() {
     if (!selectedFile.value) return
     const itemId = item.商品信息?.商品ID
     if (!itemId) return
-    const newStatus = item._status === 'hidden' ? 'active' : 'hidden'
+    const newStatus: ResultItemStatus = item._status === 'hidden' ? 'active' : 'hidden'
     try {
       await resultsApi.updateItemStatus(selectedFile.value, itemId, newStatus)
       await fetchResults()
     } catch (e) {
       if (e instanceof Error) error.value = e
+    }
+  }
+
+  async function toggleItemFlag(item: ResultItem, flag: 'is_processed' | 'is_contacted') {
+    if (!selectedFile.value) return
+    const itemId = item.商品信息?.商品ID
+    if (!itemId) return
+    const current = item[`_${flag}`] === true
+    const payload = { [flag]: !current }
+    try {
+      await resultsApi.updateItemFlags(selectedFile.value, itemId, payload)
+      await fetchResults()
+    } catch (e) {
+      if (e instanceof Error) error.value = e
+    }
+  }
+
+  async function batchUpdateSelectedItems(payload: Omit<resultsApi.BatchUpdateItemsPayload, 'item_ids'>) {
+    if (!selectedFile.value || selectedItemIds.value.size === 0) return null
+    isLoading.value = true
+    error.value = null
+    try {
+      const data = await resultsApi.updateItemsBatch(selectedFile.value, {
+        item_ids: [...selectedItemIds.value],
+        ...payload,
+      })
+      clearSelection()
+      await fetchResults()
+      await fetchInsights()
+      await fetchSellerAggregation()
+      return data
+    } catch (e) {
+      if (e instanceof Error) error.value = e
+      throw e
+    } finally {
+      isLoading.value = false
     }
   }
 
@@ -313,6 +359,7 @@ export function useResults() {
       blacklistKeywords.value = data.keywords || []
       await fetchResults()
       await fetchInsights()
+      await fetchSellerAggregation()
     } catch (e) {
       if (e instanceof Error) error.value = e
       throw e
@@ -321,10 +368,27 @@ export function useResults() {
     }
   }
 
+  const currentPageItemIds = computed(() => results.value.map(getItemId).filter(Boolean))
+  const selectedCount = computed(() => selectedItemIds.value.size)
+  const isAllCurrentPageSelected = computed(() => (
+    currentPageItemIds.value.length > 0
+    && currentPageItemIds.value.every((itemId) => selectedItemIds.value.has(itemId))
+  ))
+  const isSomeCurrentPageSelected = computed(() => (
+    currentPageItemIds.value.some((itemId) => selectedItemIds.value.has(itemId))
+  ))
+
   // Watchers
-  watch([selectedFile, filters], fetchResults, { deep: true })
+  watch([selectedFile, filters], () => {
+    clearSelection()
+    fetchResults()
+  }, { deep: true })
+  watch(filters, () => {
+    fetchSellerAggregation()
+  }, { deep: true })
   watch(selectedFile, () => {
     fetchInsights()
+    fetchSellerAggregation()
     fetchBlacklistRules()
   })
   watch(selectedFile, (value) => {
@@ -333,18 +397,7 @@ export function useResults() {
 
   watch([selectedFile, filters], () => {
     if (isApplyingRouteQuery) return
-    const query: Record<string, string> = {}
-    if (selectedFile.value) {
-      query.file = selectedFile.value
-    }
-    BOOLEAN_QUERY_KEYS.forEach((key) => {
-      if (filters[key]) {
-        query[key] = 'true'
-      }
-    })
-    if (filters.sort !== DEFAULT_FILTERS.sort) {
-      query.sort = filters.sort
-    }
+    const query = buildResultQuery(filters, selectedFile.value)
     router.replace({ query })
   }, { deep: true })
 
@@ -354,7 +407,7 @@ export function useResults() {
       isApplyingRouteQuery = true
       try {
         applyQueryFilters()
-        const routeFile = getQueryValue(route.query.file)
+        const routeFile = getResultQueryValue(route.query.file)
         if (routeFile && files.value.includes(routeFile)) {
           selectedFile.value = routeFile
         } else if (!routeFile && !selectedFile.value && files.value.length > 0) {
@@ -374,7 +427,7 @@ export function useResults() {
   watch(
     files,
     (currentFiles) => {
-      const routeFile = getQueryValue(route.query.file)
+      const routeFile = getResultQueryValue(route.query.file)
       if (routeFile && currentFiles.includes(routeFile)) {
         selectedFile.value = routeFile
       }
@@ -406,16 +459,29 @@ export function useResults() {
     files,
     selectedFile,
     results,
+    selectedItemIds,
+    selectedCount,
+    isAllCurrentPageSelected,
+    isSomeCurrentPageSelected,
     insights,
+    sellerAggregation,
     totalItems,
     filters,
     isLoading,
     error,
     fetchFiles, // Expose to allow manual refresh
     refreshResults,
+    fetchSellerAggregation,
     exportSelectedResults,
+    selectSellerFilter,
+    clearSellerFilter,
+    clearSelection,
+    toggleItemSelection,
+    toggleCurrentPageSelection,
+    batchUpdateSelectedItems,
     deleteSelectedFile,
     toggleItemBlock,
+    toggleItemFlag,
     blacklistKeywords,
     isSavingBlacklist,
     saveBlacklistRules,

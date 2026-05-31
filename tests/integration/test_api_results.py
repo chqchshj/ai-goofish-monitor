@@ -145,9 +145,27 @@ def test_results_combined_sort_param_and_invalid_sort_fallback(tmp_path, monkeyp
         assert resp.status_code == 200
         assert [item["商品信息"]["商品ID"] for item in resp.json()["items"]] == expected_ids
 
+    precedence_resp = client.get(
+        "/api/results/sort_demo_full_data.jsonl",
+        params={"sort": "publish_asc", "sort_by": "price", "sort_order": "desc"},
+    )
+    assert precedence_resp.status_code == 200
+    assert [item["商品信息"]["商品ID"] for item in precedence_resp.json()["items"]] == ["1002", "1001", "1003"]
+
     invalid_resp = client.get("/api/results/sort_demo_full_data.jsonl", params={"sort": "unknown_desc"})
     assert invalid_resp.status_code == 200
     assert [item["商品信息"]["商品ID"] for item in invalid_resp.json()["items"]] == ["1002", "1003", "1001"]
+
+    invalid_with_legacy_resp = client.get(
+        "/api/results/sort_demo_full_data.jsonl",
+        params={"sort": "unknown_desc", "sort_by": "price", "sort_order": "asc"},
+    )
+    assert invalid_with_legacy_resp.status_code == 200
+    assert [item["商品信息"]["商品ID"] for item in invalid_with_legacy_resp.json()["items"]] == [
+        "1003",
+        "1002",
+        "1001",
+    ]
 
     legacy_resp = client.get(
         "/api/results/sort_demo_full_data.jsonl",
@@ -159,6 +177,13 @@ def test_results_combined_sort_param_and_invalid_sort_fallback(tmp_path, monkeyp
     export_resp = client.get("/api/results/sort_demo_full_data.jsonl/export", params={"sort": "price_asc"})
     assert export_resp.status_code == 200
     assert [row["商品ID"] for row in _csv_rows(export_resp.text)] == ["1003", "1002", "1001"]
+
+    export_precedence_resp = client.get(
+        "/api/results/sort_demo_full_data.jsonl/export",
+        params={"sort": "publish_desc", "sort_by": "price", "sort_order": "asc"},
+    )
+    assert export_precedence_resp.status_code == 200
+    assert [row["商品ID"] for row in _csv_rows(export_precedence_resp.text)] == ["1003", "1001", "1002"]
 
 
 def test_results_attribute_filters_for_yhb_and_free_shipping_list_and_export(tmp_path, monkeypatch):
@@ -251,6 +276,56 @@ def test_results_attribute_filters_for_yhb_and_free_shipping_list_and_export(tmp
     assert "标题写着验货宝和包邮但没有平台标签" not in export_resp.text
     assert "YHB Only" not in export_resp.text
     assert "Free Shipping Only" not in export_resp.text
+
+
+def test_results_seller_filter_list_and_export(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    jsonl_dir = tmp_path / "jsonl"
+    jsonl_dir.mkdir(parents=True, exist_ok=True)
+    target_file = jsonl_dir / "seller_filter_full_data.jsonl"
+
+    records = [
+        {
+            "爬取时间": "2026-01-01T01:00:00",
+            "商品信息": {"商品ID": "1101", "商品标题": "Alpha One", "当前售价": "¥1000"},
+            "卖家信息": {"卖家昵称": "Alpha"},
+            "ai_analysis": {"analysis_source": "ai", "is_recommended": True},
+        },
+        {
+            "爬取时间": "2026-01-01T02:00:00",
+            "商品信息": {"商品ID": "1102", "商品标题": "Beta One", "当前售价": "¥2000", "卖家昵称": "Beta"},
+            "ai_analysis": {"analysis_source": "ai", "is_recommended": True},
+        },
+        {
+            "爬取时间": "2026-01-01T03:00:00",
+            "商品信息": {"商品ID": "1103", "商品标题": "Alpha Two", "当前售价": "¥3000"},
+            "卖家信息": {"卖家昵称": "Alpha"},
+            "ai_analysis": {"analysis_source": "keyword", "is_recommended": False},
+        },
+    ]
+    _write_jsonl(target_file, records)
+
+    app = FastAPI()
+    app.include_router(results.router)
+    client = TestClient(app)
+
+    alpha_resp = client.get("/api/results/seller_filter_full_data.jsonl", params={"seller": "Alpha"})
+    assert alpha_resp.status_code == 200
+    alpha_payload = alpha_resp.json()
+    assert alpha_payload["total_items"] == 2
+    assert [item["商品信息"]["商品ID"] for item in alpha_payload["items"]] == ["1103", "1101"]
+
+    fallback_resp = client.get("/api/results/seller_filter_full_data.jsonl", params={"seller": "Beta"})
+    assert fallback_resp.status_code == 200
+    fallback_payload = fallback_resp.json()
+    assert fallback_payload["total_items"] == 1
+    assert fallback_payload["items"][0]["商品信息"]["商品ID"] == "1102"
+
+    export_resp = client.get("/api/results/seller_filter_full_data.jsonl/export", params={"seller": "Alpha"})
+    assert export_resp.status_code == 200
+    assert "Alpha One" in export_resp.text
+    assert "Alpha Two" in export_resp.text
+    assert "Beta One" not in export_resp.text
 
 
 def test_results_personal_seller_filter_uses_ai_persona_analysis(tmp_path, monkeypatch):
@@ -625,3 +700,337 @@ def test_results_blacklist_rules_hide_items_from_view_and_insights(tmp_path, mon
     assert download_resp.status_code == 200
     assert "MacBook Air Intel i5 8+256" in download_resp.text
     assert "MacBook Pro Intel 13寸" in download_resp.text
+
+
+
+
+def test_results_batch_update_items(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    jsonl_dir = tmp_path / "jsonl"
+    jsonl_dir.mkdir(parents=True, exist_ok=True)
+    target_file = jsonl_dir / "batch_demo_full_data.jsonl"
+
+    records = [
+        {
+            "爬取时间": "2026-01-01T01:00:00",
+            "搜索关键字": "batch_demo",
+            "任务名称": "Batch Demo",
+            "商品信息": {
+                "商品ID": "4001",
+                "商品标题": "Batch Item A",
+                "商品链接": "https://www.goofish.com/item?id=4001",
+                "当前售价": "¥100",
+                "发布时间": "2026-01-01 10:00",
+            },
+            "卖家信息": {"卖家昵称": "SellerA"},
+            "ai_analysis": {
+                "analysis_source": "ai",
+                "is_recommended": True,
+                "reason": "good",
+            },
+        },
+        {
+            "爬取时间": "2026-01-01T02:00:00",
+            "搜索关键字": "batch_demo",
+            "任务名称": "Batch Demo",
+            "商品信息": {
+                "商品ID": "4002",
+                "商品标题": "Batch Item B",
+                "商品链接": "https://www.goofish.com/item?id=4002",
+                "当前售价": "¥200",
+                "发布时间": "2026-01-01 11:00",
+            },
+            "卖家信息": {"卖家昵称": "SellerB"},
+            "ai_analysis": {
+                "analysis_source": "keyword",
+                "is_recommended": True,
+                "keyword_hit_count": 2,
+            },
+        },
+        {
+            "爬取时间": "2026-01-01T03:00:00",
+            "搜索关键字": "batch_demo",
+            "任务名称": "Batch Demo",
+            "商品信息": {
+                "商品ID": "4003",
+                "商品标题": "Batch Item C",
+                "商品链接": "https://www.goofish.com/item?id=4003",
+                "当前售价": "¥300",
+                "发布时间": "2026-01-01 12:00",
+            },
+            "卖家信息": {"卖家昵称": "SellerC"},
+            "ai_analysis": {
+                "analysis_source": "ai",
+                "is_recommended": False,
+                "keyword_hit_count": 0,
+            },
+        },
+    ]
+    _write_jsonl(target_file, records)
+
+    app = FastAPI()
+    app.include_router(results.router)
+    client = TestClient(app)
+
+    # Batch mark processed for items 4001 and 4002
+    resp = client.patch(
+        "/api/results/batch_demo_full_data.jsonl/items/batch",
+        json={"item_ids": ["4001", "4002"], "is_processed": True},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["updated_count"] == 2
+    assert data["is_processed"] is True
+
+    # Verify flags persist in GET
+    get_resp = client.get("/api/results/batch_demo_full_data.jsonl")
+    items = get_resp.json()["items"]
+    item_a = next(i for i in items if i["商品信息"]["商品ID"] == "4001")
+    item_b = next(i for i in items if i["商品信息"]["商品ID"] == "4002")
+    item_c = next(i for i in items if i["商品信息"]["商品ID"] == "4003")
+    assert item_a["_is_processed"] is True
+    assert item_b["_is_processed"] is True
+    assert item_c["_is_processed"] is False
+
+    # Batch hide items 4001 and 4003
+    resp = client.patch(
+        "/api/results/batch_demo_full_data.jsonl/items/batch",
+        json={"item_ids": ["4001", "4003"], "status": "hidden"},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["updated_count"] == 2
+    assert data["status"] == "hidden"
+
+    # Verify hidden items are not visible by default
+    get_resp = client.get("/api/results/batch_demo_full_data.jsonl")
+    items = get_resp.json()["items"]
+    assert len(items) == 1  # only 4002 visible
+    assert items[0]["商品信息"]["商品ID"] == "4002"
+
+    # With include_hidden all three should be visible
+    get_resp = client.get("/api/results/batch_demo_full_data.jsonl", params={"include_hidden": True})
+    items = get_resp.json()["items"]
+    assert len(items) == 3
+
+    # Batch un-hide
+    resp = client.patch(
+        "/api/results/batch_demo_full_data.jsonl/items/batch",
+        json={"item_ids": ["4001", "4003"], "status": "active"},
+    )
+    assert resp.status_code == 200
+
+    get_resp = client.get("/api/results/batch_demo_full_data.jsonl")
+    assert get_resp.json()["total_items"] == 3
+
+    # Combined batch: mark contacted + process in one call
+    resp = client.patch(
+        "/api/results/batch_demo_full_data.jsonl/items/batch",
+        json={"item_ids": ["4001"], "is_processed": False, "is_contacted": True},
+    )
+    assert resp.status_code == 200
+    get_resp = client.get("/api/results/batch_demo_full_data.jsonl")
+    item_a = next(i for i in get_resp.json()["items"] if i["商品信息"]["商品ID"] == "4001")
+    assert item_a["_is_processed"] is False
+    assert item_a["_is_contacted"] is True
+
+    # Empty item_ids → 400
+    resp = client.patch(
+        "/api/results/batch_demo_full_data.jsonl/items/batch",
+        json={"item_ids": [], "is_processed": True},
+    )
+    assert resp.status_code == 400
+
+    # No fields to update → 400
+    resp = client.patch(
+        "/api/results/batch_demo_full_data.jsonl/items/batch",
+        json={"item_ids": ["4001"]},
+    )
+    assert resp.status_code == 400
+
+    # Non-existent item IDs → still returns 200 with updated_count=0 (then 404)
+    resp = client.patch(
+        "/api/results/batch_demo_full_data.jsonl/items/batch",
+        json={"item_ids": ["9999", "8888"], "is_processed": True},
+    )
+    assert resp.status_code == 404
+
+    # Invalid status value → 400
+    resp = client.patch(
+        "/api/results/batch_demo_full_data.jsonl/items/batch",
+        json={"item_ids": ["4001"], "status": "bogus"},
+    )
+    assert resp.status_code == 422
+
+    # Export respects hide_processed filter after batch processed
+    client.patch(
+        "/api/results/batch_demo_full_data.jsonl/items/batch",
+        json={"item_ids": ["4002"], "is_processed": True},
+    )
+    export_resp = client.get(
+        "/api/results/batch_demo_full_data.jsonl/export",
+        params={"hide_processed": True},
+    )
+    assert export_resp.status_code == 200
+    assert "Batch Item A" in export_resp.text  # 4001 was un-marked
+    assert "Batch Item B" not in export_resp.text  # 4002 is processed
+    assert "Batch Item C" in export_resp.text  # 4003 never processed
+
+def test_results_user_flags_toggle_and_filter(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    jsonl_dir = tmp_path / "jsonl"
+    jsonl_dir.mkdir(parents=True, exist_ok=True)
+    target_file = jsonl_dir / "flags_demo_full_data.jsonl"
+
+    records = [
+        {
+            "爬取时间": "2026-01-01T01:00:00",
+            "搜索关键字": "flags_demo",
+            "任务名称": "Flags Demo",
+            "商品信息": {
+                "商品ID": "3001",
+                "商品标题": "Item A",
+                "商品链接": "https://www.goofish.com/item?id=3001",
+                "当前售价": "¥100",
+                "发布时间": "2026-01-01 10:00",
+            },
+            "卖家信息": {"卖家昵称": "SellerA"},
+            "ai_analysis": {
+                "analysis_source": "ai",
+                "is_recommended": True,
+                "reason": "good deal",
+            },
+        },
+        {
+            "爬取时间": "2026-01-01T02:00:00",
+            "搜索关键字": "flags_demo",
+            "任务名称": "Flags Demo",
+            "商品信息": {
+                "商品ID": "3002",
+                "商品标题": "Item B",
+                "商品链接": "https://www.goofish.com/item?id=3002",
+                "当前售价": "¥200",
+                "发布时间": "2026-01-01 11:00",
+            },
+            "卖家信息": {"卖家昵称": "SellerB"},
+            "ai_analysis": {
+                "analysis_source": "keyword",
+                "is_recommended": False,
+                "keyword_hit_count": 0,
+            },
+        },
+    ]
+    _write_jsonl(target_file, records)
+
+    app = FastAPI()
+    app.include_router(results.router)
+    client = TestClient(app)
+
+    # Initially, both items are visible and neither is flagged
+    resp = client.get("/api/results/flags_demo_full_data.jsonl")
+    assert resp.status_code == 200
+    assert resp.json()["total_items"] == 2
+
+    # Mark item 3001 as processed
+    patch_resp = client.patch(
+        "/api/results/flags_demo_full_data.jsonl/items/3001/flags",
+        json={"is_processed": True},
+    )
+    assert patch_resp.status_code == 200
+    assert patch_resp.json()["is_processed"] is True
+
+    # Mark item 3002 as contacted
+    patch_resp = client.patch(
+        "/api/results/flags_demo_full_data.jsonl/items/3002/flags",
+        json={"is_contacted": True},
+    )
+    assert patch_resp.status_code == 200
+    assert patch_resp.json()["is_contacted"] is True
+
+    # Verify flags are persisted in GET response
+    resp = client.get("/api/results/flags_demo_full_data.jsonl")
+    items = resp.json()["items"]
+    item_a = next(i for i in items if i["商品信息"]["商品ID"] == "3001")
+    item_b = next(i for i in items if i["商品信息"]["商品ID"] == "3002")
+    assert item_a["_is_processed"] is True
+    assert item_a["_is_contacted"] is False
+    assert item_b["_is_processed"] is False
+    assert item_b["_is_contacted"] is True
+
+    # Filter: processed_only
+    resp = client.get(
+        "/api/results/flags_demo_full_data.jsonl",
+        params={"processed_only": True},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["total_items"] == 1
+    assert resp.json()["items"][0]["商品信息"]["商品ID"] == "3001"
+
+    # Filter: contacted_only
+    resp = client.get(
+        "/api/results/flags_demo_full_data.jsonl",
+        params={"contacted_only": True},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["total_items"] == 1
+    assert resp.json()["items"][0]["商品信息"]["商品ID"] == "3002"
+
+    # Filter: hide_processed
+    resp = client.get(
+        "/api/results/flags_demo_full_data.jsonl",
+        params={"hide_processed": True},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["total_items"] == 1
+    assert resp.json()["items"][0]["商品信息"]["商品ID"] == "3002"
+
+    # Toggle off: unmark processed
+    patch_resp = client.patch(
+        "/api/results/flags_demo_full_data.jsonl/items/3001/flags",
+        json={"is_processed": False},
+    )
+    assert patch_resp.status_code == 200
+
+    # Verify both visible again with hide_processed
+    resp = client.get(
+        "/api/results/flags_demo_full_data.jsonl",
+        params={"hide_processed": True},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["total_items"] == 2
+
+    # Empty body is rejected
+    empty_resp = client.patch(
+        "/api/results/flags_demo_full_data.jsonl/items/3001/flags",
+        json={},
+    )
+    assert empty_resp.status_code == 400
+
+    # Non-existent item is 404
+    missing_resp = client.patch(
+        "/api/results/flags_demo_full_data.jsonl/items/9999/flags",
+        json={"is_processed": True},
+    )
+    assert missing_resp.status_code == 404
+
+    # Export respects hide_processed filter — both items visible after unmark
+    export_resp = client.get(
+        "/api/results/flags_demo_full_data.jsonl/export",
+        params={"hide_processed": True},
+    )
+    assert export_resp.status_code == 200
+    assert "Item B" in export_resp.text
+    assert "Item A" in export_resp.text
+
+    # Re-mark 3001 as processed and verify export excludes it
+    client.patch(
+        "/api/results/flags_demo_full_data.jsonl/items/3001/flags",
+        json={"is_processed": True},
+    )
+    export_resp = client.get(
+        "/api/results/flags_demo_full_data.jsonl/export",
+        params={"hide_processed": True},
+    )
+    assert export_resp.status_code == 200
+    assert "Item B" in export_resp.text
+    assert "Item A" not in export_resp.text

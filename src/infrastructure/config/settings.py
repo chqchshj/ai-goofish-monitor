@@ -75,6 +75,29 @@ class NotificationSettings(_EnvSettings):
     webhook_body: Optional[str] = _env_field(None, "WEBHOOK_BODY")
     pcurl_to_mobile: bool = _env_field(True, "PCURL_TO_MOBILE")
 
+    # ------------------------------------------------------------------
+    # P4-1 通知降噪 seam (env-only, 不通过 Web UI 暴露 / 修改)
+    #
+    # 这些字段刻意不进入 ``NOTIFICATION_FIELD_MAP``, 因此不会出现在
+    # ``/settings/notification`` 的 GET/PATCH 响应里。原因:
+    # - P4-1 阶段降噪行为还在评估期, 默认值=不过滤=兼容旧行为。
+    # - 仅供运维通过 .env / 环境变量打开实验, 避免暴露给前端造成
+    #   一次性破坏性配置 (例如把 min_score 误设到 100)。
+    # - P4-2 之后再考虑把已稳定的字段透出到 UI。
+    # ------------------------------------------------------------------
+    notification_min_score: Optional[float] = _env_field(
+        None, "NOTIFICATION_MIN_SCORE"
+    )
+    notification_min_level: Optional[str] = _env_field(
+        None, "NOTIFICATION_MIN_LEVEL"
+    )
+    notification_dedup_window_seconds: int = _env_field(
+        0, "NOTIFICATION_DEDUP_WINDOW_SECONDS", ge=0
+    )
+    notification_seller_throttle_window_seconds: int = _env_field(
+        0, "NOTIFICATION_SELLER_THROTTLE_WINDOW_SECONDS", ge=0
+    )
+
     def has_any_notification_enabled(self) -> bool:
         """检查是否配置了任何通知服务"""
         return any([

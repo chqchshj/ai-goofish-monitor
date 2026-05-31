@@ -132,6 +132,13 @@ class WebhookClient(NotificationClient):
         return value
 
     def _replace_placeholders(self, value: str, message: NotificationMessage) -> str:
+        badges = []
+        if message.inspection_service:
+            badges.append("验货宝")
+        if message.free_shipping:
+            badges.append("包邮")
+        badges_str = " · ".join(badges) if badges else ""
+        tags_str = ",".join(message.tags) if message.tags else ""
         replacements = {
             "title": message.notification_title,
             "content": message.content,
@@ -139,6 +146,16 @@ class WebhookClient(NotificationClient):
             "reason": message.reason,
             "desktop_link": message.desktop_link,
             "mobile_link": message.mobile_link or message.desktop_link,
+            # P4-2 enriched template vars
+            "region": message.region,
+            "tags": tags_str,
+            "badges": badges_str,
+            "free_shipping": str(message.free_shipping).lower(),
+            "inspection_service": str(message.inspection_service).lower(),
+            "seller_nickname": message.seller_nickname,
+            "seller_type_persona": message.seller_type_persona,
+            "seller_type_status": message.seller_type_status,
+            "seller_type_comment": message.seller_type_comment,
         }
         rendered = value
         for key, replacement in replacements.items():

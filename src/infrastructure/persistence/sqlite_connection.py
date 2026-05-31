@@ -147,6 +147,7 @@ def init_schema(conn: sqlite3.Connection) -> None:
     _migrate_tasks_notification_targets(conn)
     _migrate_tasks_yhb_only(conn)
     _migrate_result_items_status(conn)
+    _migrate_result_items_user_flags(conn)
     conn.commit()
 
 
@@ -184,6 +185,27 @@ def _migrate_result_items_status(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_results_filename_status_crawl"
         " ON result_items(result_filename, status, crawl_time DESC)"
+    )
+
+
+def _migrate_result_items_user_flags(conn: sqlite3.Connection) -> None:
+    """Add is_processed and is_contacted boolean columns to result_items."""
+    row = conn.execute(
+        "SELECT value FROM app_metadata WHERE key = 'migration:result_items_user_flags'"
+    ).fetchone()
+    if row is not None:
+        return
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(result_items)").fetchall()]
+    if "is_processed" not in cols:
+        conn.execute(
+            "ALTER TABLE result_items ADD COLUMN is_processed INTEGER NOT NULL DEFAULT 0"
+        )
+    if "is_contacted" not in cols:
+        conn.execute(
+            "ALTER TABLE result_items ADD COLUMN is_contacted INTEGER NOT NULL DEFAULT 0"
+        )
+    conn.execute(
+        "INSERT OR REPLACE INTO app_metadata(key, value) VALUES ('migration:result_items_user_flags', 'done')"
     )
 
 
